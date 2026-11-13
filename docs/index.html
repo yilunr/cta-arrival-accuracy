@@ -1,6 +1,58 @@
-How accurate are CTA arrival predictions?
-Data not available yet. Check back after the next hourly update.
-
-Trains
-Buses
-On time = the vehicle arrived within the tolerance of its prediction (trains 2 min, buses 3 min), for predictions made 2–15 minutes ahead. Times are Chicago time. Built from the open CTA Train and Bus Tracker APIs; refreshed hourly.
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>How accurate are CTA arrival predictions?</title>
+<style>
+:root{--bg:#f7f8fa;--card:#fff;--ink:#1c2430;--mut:#6b7686;--early:#4f8fc0;--ok:#5aa469;--late:#d9894a}
+*{box-sizing:border-box}body{margin:0;font:15px/1.45 system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+main{max-width:980px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:17px;margin:0 0 10px}
+.sub{color:var(--mut);margin:0 0 16px}
+nav{display:flex;gap:8px;margin-bottom:16px}
+nav button{border:1px solid #d5dae1;background:var(--card);padding:8px 16px;border-radius:20px;cursor:pointer;font:inherit}
+nav button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.card{background:var(--card);border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:0 1px 2px #0001}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.tile b{display:block;font-size:30px}.tile span{color:var(--mut);font-size:13px}
+.bar{display:flex;height:18px;border-radius:9px;overflow:hidden;background:#eee}
+.bar i{display:block}.e{background:var(--early)}.o{background:var(--ok)}.l{background:var(--late)}
+.legend{font-size:12px;color:var(--mut);margin-top:6px}.legend u{text-decoration:none;margin-right:12px}
+.legend u:before{content:"";display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;background:currentColor}
+.row{display:grid;grid-template-columns:200px 1fr 54px;gap:8px;align-items:center;margin:5px 0;font-size:13px}
+.row .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hours{display:flex;align-items:flex-end;height:120px;gap:3px}
+.hours div{flex:1;background:var(--ok);border-radius:3px 3px 0 0;min-height:2px}
+.hl{display:flex;gap:3px;font-size:10px;color:var(--mut)}.hl span{flex:1;text-align:center}
+select{font:inherit;padding:8px;border-radius:8px;border:1px solid #d5dae1;width:100%}
+.note{color:var(--mut);font-size:12px}
+@media(max-width:560px){.row{grid-template-columns:110px 1fr 46px}}
+</style></head><body><main>
+<h1>How accurate are CTA arrival predictions?</h1>
+<p class="sub" id="sub">Loading…</p>
+<nav><button id="b-train" class="on">Trains</button><button id="b-bus">Buses</button></nav>
+<div id="train"></div><div id="bus" hidden></div>
+<p class="note">On time = the vehicle arrived within the tolerance of its prediction (trains 2 min, buses 3 min), for predictions made 2–15 minutes ahead. Times are Chicago time. Built from the open CTA Train and Bus Tracker APIs; refreshed hourly.</p>
+</main>
+<script>
+const $=id=>document.getElementById(id), pct=v=>v==null?"–":Math.round(v)+"%";
+const h12=h=>(h%12||12)+(h<12?"a":"p");
+const split=r=>`<div class="bar"><i class="e" style="width:${r.early}%"></i><i class="o" style="width:${r.on_time}%"></i><i class="l" style="width:${r.late}%"></i></div>`;
+const legend='<div class="legend"><u style="color:var(--early)">Early</u><u style="color:var(--ok)">On time</u><u style="color:var(--late)">Late</u></div>';
+const tiles=o=>`<div class="card tiles"><div class="tile"><b>${pct(o.on_time)}</b><span>on time</span></div><div class="tile"><b>${pct(o.early)}</b><span>came early</span></div><div class="tile"><b>${pct(o.late)}</b><span>came late</span></div><div class="tile"><b>${o.abs_err.toFixed(1)} min</b><span>typically off by</span></div></div>`;
+const hours=list=>{const m=Object.fromEntries(list.map(r=>[r.hour_of_day,r]));let b="",l="";for(let h=0;h<24;h++){const r=m[h];b+=`<div title="${h12(h)}: ${r?pct(r.on_time):'no data'}" style="height:${r?r.on_time:0}%"></div>`;l+=`<span>${h%3==0?h12(h):""}</span>`}return `<div class="hours">${b}</div><div class="hl">${l}</div>`};
+const rank=(list,key)=>list.map(r=>`<div class="row"><span class="nm" title="${r[key]}">${r[key]}</span>${split(r)}<span>${pct(r.on_time)}</span></div>`).join("")+legend;
+fetch("data.json?"+Date.now()).then(r=>r.json()).then(d=>{
+  $("sub").textContent=`Last ${d.window_days} days · updated ${d.updated_utc} UTC`;
+  const t=d.train;
+  $("train").innerHTML=tiles(t.overall)+
+   `<div class="card"><h2>On time by hour of day</h2>${hours(t.by_hour)}</div>`+
+   `<div class="card"><h2>By line</h2>${rank(t.by_line,"route_label")}</div>`+
+   `<div class="card"><h2>Check your train platform</h2><select id="pick">${t.platforms.map(p=>`<option value="${p.stop_id}">${p.stop_label}</option>`).join("")}</select><div id="pf" style="margin-top:12px"></div></div>`;
+  const show=()=>{const id=$("pick").value,p=t.platforms.find(x=>x.stop_id===id),hr=t.platform_hours.filter(x=>x.stop_id===id);
+    $("pf").innerHTML=tiles(p)+"<h2>On time by hour at this platform</h2>"+hours(hr)};
+  $("pick").onchange=show;show();
+  const b=d.bus;
+  $("bus").innerHTML=tiles(b.overall)+`<div class="card"><h2>On time by hour of day</h2>${hours(b.by_hour)}</div>`+`<div class="card"><h2>Busiest routes</h2>${rank(b.by_route,"route_label")}</div>`;
+}).catch(()=>$("sub").textContent="Data not available yet. Check back after the next hourly update.");
+for(const m of ["train","bus"])$("b-"+m).onclick=()=>{for(const x of ["train","bus"]){$(x).hidden=x!==m;$("b-"+x).classList.toggle("on",x===m)}};
+</script></body></html>
