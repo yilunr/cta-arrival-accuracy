@@ -48,7 +48,8 @@ select{font:inherit;padding:7px 8px;border-radius:8px;border:1px solid var(--lin
 .note{color:var(--mut);font-size:12.5px;margin-top:18px;text-align:center}
 .empty{color:var(--mut);padding:24px 0;text-align:center}
 #tip{position:fixed;pointer-events:none;background:var(--ink);color:var(--bg);padding:6px 9px;border-radius:6px;font-size:12px;z-index:2000;display:none;max-width:260px}
-@media(max-width:760px){.c3,.c4,.c6,.c8{grid-column:span 12}.cols{height:130px}#map-train,#map-bus{height:360px}}
+@media(max-width:900px){.c3,.c4,.c6,.c8{grid-column:span 12}.cols{height:130px}#map-train,#map-bus{height:360px}}
+@media(prefers-color-scheme:dark){.leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.95) contrast(.9)}}
 </style></head><body><main>
 <h1 id="title">Can you trust the CTA trackers?</h1>
 <p class="sub" id="sub">Loading…</p>
@@ -164,7 +165,7 @@ function drawMap(mode,stops){
   if(!window.L||!stops.length)return;
   const dark=matchMedia("(prefers-color-scheme:dark)").matches;
   const map=maps[mode]=L.map("map-"+mode,{scrollWheelZoom:false});
-  L.tileLayer(`https://{s}.basemaps.cartocdn.com/${dark?"dark_all":"light_all"}/{z}/{x}/{y}{r}.png`,{attribution:'© OpenStreetMap, © CARTO',maxZoom:18}).addTo(map);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',maxZoom:18}).addTo(map);
   const pts=stops.filter(s=>s.lat&&s.lon);
   for(const s of pts)L.circleMarker([s.lat,s.lon],{radius:7,color:dark?"#1b1f23":"#fff",weight:2,fillColor:rateColor(s.r),fillOpacity:1})
     .bindTooltip(`<b>${esc(s.label)}</b><br>${pct(s.r)} on time · ${num(s.n)} predictions`).addTo(map);
