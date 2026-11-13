@@ -92,6 +92,17 @@ function summarize(rows){
   return {all,byHour,byPeriod,byStop};
 }
 
+// Median minutes off, from a histogram of 0.25-minute bins: [stop, dow, period, 17 counts]
+function typical(mode,f,all){
+  const m=D[mode];if(!all.n)return "–";
+  if(!m.hist)return (all.a/10/all.n).toFixed(1);
+  const bins=new Array(17).fill(0);let n=0;
+  for(const r of m.hist){if((f.stop!=null&&r[0]!==f.stop)||(f.days.size&&!f.days.has(r[1]))||(f.periods&&f.periods.size&&!f.periods.has(r[2]))||(f.area&&m.stops[r[0]].area!==f.area))continue;
+    for(let i=0;i<17;i++){bins[i]+=r[3+i];n+=r[3+i]}}
+  if(!n)return "–";
+  let cum=0;for(let i=0;i<17;i++){if(cum+bins[i]>=n/2)return i===16?"4+":((i+(n/2-cum)/bins[i])*.25).toFixed(1);cum+=bins[i]}
+}
+
 // ---- pieces
 const kpi=(v,l,c="c4")=>`<div class="card kpi ${c}"><b>${v}</b><span>${l}</span></div>`;
 function splitBar(t){
@@ -123,7 +134,7 @@ const areaSelect=(id,mode,val)=>{const a=[...new Set(D[mode].stops.map(s=>s.area
 
 // ---- pages
 function overview(mode){
-  const s=S[mode],m=D[mode],T=mode==="train",{all,byHour,byPeriod,byStop}=summarize(rowsFor(mode,{days:s.days,periods:s.periods,area:s.area}));
+  const s=S[mode],m=D[mode],T=mode==="train",F={days:s.days,periods:s.periods,area:s.area},{all,byHour,byPeriod,byStop}=summarize(rowsFor(mode,F));
   const stops=Object.entries(byStop).filter(([,t])=>t.n>=MIN_N).map(([i,t])=>({i:+i,...m.stops[i],r:rate(t),n:t.n}));
   let rank;
   if(T){ // grouped by station, platforms of one station next to each other
@@ -138,7 +149,7 @@ function overview(mode){
   </div>
   <div class="grid">
     ${kpi(pct(rate(all)),T?"Train on time":"Bus on time")}
-    ${kpi(all.n?(all.a/10/all.n).toFixed(1):"–","Typically off by (minutes)")}
+    ${kpi(typical(mode,F,all),"Typically off by (minutes)")}
     ${kpi(num(all.n),"Predictions checked")}
     <div class="card c12"><h2>When the tracker is wrong, which way?</h2>${splitBar(all)}</div>
     <div class="card c8"><h2>On time by hour of day</h2>${hourChart(byHour)}${scale}</div>
@@ -163,7 +174,7 @@ function stopPage(mode){
   const s=S[mode],m=D[mode],T=mode==="train";
   const list=m.stops.map((x,i)=>({...x,i})).filter(x=>!s.stopArea||x.area===s.stopArea);
   if(!list.some(x=>x.i===s.stop))s.stop=list[0]?.i??0;
-  const {all,byHour,byPeriod}=summarize(rowsFor(mode,{days:s.stopDays,stop:s.stop}));
+  const F={days:s.stopDays,stop:s.stop},{all,byHour,byPeriod}=summarize(rowsFor(mode,F));
   const routes=m.routes.filter(r=>r[0]===s.stop&&r[2]>0).map(r=>({name:r[1],n:r[2],r:100*(r[2]-r[3]-r[4])/r[2]})).sort((a,b)=>b.r-a.r);
   $("page").innerHTML=`
   <div class="filters">
@@ -173,7 +184,7 @@ function stopPage(mode){
   </div>
   <div class="grid">
     ${kpi(pct(rate(all)),`On time at this ${T?"platform":"stop"}`,"c4")}
-    ${kpi(all.n?(all.a/10/all.n).toFixed(1):"–","Typically off by (minutes)","c4")}
+    ${kpi(typical(mode,F,all),"Typically off by (minutes)","c4")}
     ${kpi(num(all.n),"Predictions checked","c4")}
     <div class="card c12"><h2>At this ${T?"platform":"stop"}: early, on time or late?</h2>${splitBar(all)}</div>
     <div class="card c12"><h2>Early, on time or late by time of day</h2>${all.n?periodSplit(byPeriod):'<div class="empty">No data</div>'}</div>
