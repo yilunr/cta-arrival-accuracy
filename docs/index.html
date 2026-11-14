@@ -5,7 +5,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
 :root{color-scheme:light;--bg:#f6fafb;--card:#fff;--ink:#1b1f23;--ink2:#374151;--mut:#7d8793;--line:#e4e9ee;
---early:#5fa8d3;--ok:#4fa36b;--late:#e58b7b;--lo:#f0c36d;--mid:#8acb88;--hi:#356c2a;--chip:#eef2f5;--warn:#c98500;--bad:#d9534f}
+--early:#FFB300;--ok:#4CAF50;--late:#EF5350;--line-c:#5FA8D3;--lo:#F0C36D;--hi:#4FA36B;--chip:#eef2f5;--warn:#c98500;--bad:#d9534f}
 @media(prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#1b1f23;--card:#2a2f35;--ink:#f1f3f5;--ink2:#d7e1e9;--mut:#9aa5b1;--line:#3c444c;--chip:#343b43}}
 *{box-sizing:border-box}
 body{margin:0;font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}
@@ -55,7 +55,7 @@ select,input[list]{font:inherit;padding:7px 8px;border-radius:8px;border:1px sol
 .scroll{max-height:520px;overflow:auto;padding-right:6px}
 #map-train,#map-bus{height:540px;border-radius:8px}
 .scale{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mut);margin-top:8px}
-.scale i{flex:0 0 160px;height:8px;border-radius:4px;background:linear-gradient(90deg,var(--lo),var(--mid),var(--hi))}
+.scale i{flex:0 0 160px;height:8px;border-radius:4px;background:linear-gradient(90deg,var(--lo),var(--hi))}
 .note{color:var(--mut);font-size:12.5px;margin-top:18px;text-align:center}
 .empty{color:var(--mut);padding:24px 0;text-align:center}
 #tip{position:fixed;pointer-events:none;background:var(--ink);color:var(--bg);padding:6px 9px;border-radius:6px;font-size:12px;z-index:2000;display:none;max-width:260px}
@@ -83,9 +83,11 @@ let D=null,page="train",maps={};
 const S={train:{days:new Set(),periods:new Set(),area:"",stop:null,stopArea:"",stopDays:new Set()},
          bus:{days:new Set(),periods:new Set(),area:"",stop:null,stopArea:"",stopDays:new Set()}};
 
-// Fixed colour scale for on-time rate: 60% and below = amber, 80% = light green, 100% = dark green.
+// Colour scales copied from the Databricks dashboard.
+// Bars: linear 50% #E58B7B -> 70% #F4D58D -> 90% #8ACB88 -> 100% #4FA36B (clamped). Map: #F0C36D -> #4FA36B.
 const mix=(a,b,t)=>"#"+[0,2,4].map(i=>Math.round(parseInt(a.slice(i+1,i+3),16)*(1-t)+parseInt(b.slice(i+1,i+3),16)*t).toString(16).padStart(2,"0")).join("");
-const rateColor=r=>r<=60?"#f0c36d":r<80?mix("#f0c36d","#8acb88",(r-60)/20):mix("#8acb88","#356c2a",(r-80)/20);
+const rateColor=r=>r<=50?"#e58b7b":r<70?mix("#e58b7b","#f4d58d",(r-50)/20):r<90?mix("#f4d58d","#8acb88",(r-70)/20):r<100?mix("#8acb88","#4fa36b",(r-90)/10):"#4fa36b";
+const mapColor=r=>mix("#f0c36d","#4fa36b",Math.min(1,Math.max(0,(r-50)/50)));
 
 // ---- aggregation over the cube: [stop, dow, hour, n, early, late, abs*10]
 const zero=()=>({n:0,e:0,l:0,a:0});
@@ -131,13 +133,13 @@ function hourChart(byHour){
   for(let h=0;h<24;h++){const t=byHour[h],r=t?rate(t):null;
     if(r==null){if(cur.length){segs.push(cur);cur=[]}continue}
     cur.push([X(h),Y(r)]);
-    dots+=`<circle cx="${X(h)}" cy="${Y(r)}" r="8" fill="transparent" data-tip="${h12(h)}: ${pct(r)} on time · ${num(t.n)} predictions"/><circle cx="${X(h)}" cy="${Y(r)}" r="3.2" fill="${rateColor(r)}" pointer-events="none"/>`}
+    dots+=`<circle cx="${X(h)}" cy="${Y(r)}" r="8" fill="transparent" data-tip="${h12(h)}: ${pct(r)} on time · ${num(t.n)} predictions"/><circle cx="${X(h)}" cy="${Y(r)}" r="3.2" fill="var(--line-c)" pointer-events="none"/>`}
   if(cur.length)segs.push(cur);
-  const line=segs.map(sg=>sg.length>1?`<polyline points="${sg.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join(" ")}" fill="none" stroke="var(--ok)" stroke-width="2" stroke-linejoin="round"/>`:"").join("");
+  const line=segs.map(sg=>sg.length>1?`<polyline points="${sg.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join(" ")}" fill="none" stroke="var(--line-c)" stroke-width="2" stroke-linejoin="round"/>`:"").join("");
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${grid}${line}${dots}${lbl}</svg>`;
 }
-const bar=(name,t,tipName)=>{const r=rate(t),e=100*t.e/t.n,l=100*t.l/t.n;
-  return `<div class="row" data-tip="${esc(tipName||name)}: ${pct(r)} on time · early ${e.toFixed(1)}% · late ${l.toFixed(1)}% (${num(t.n)} predictions)"><span class="nm">${esc(name)}</span><div class="tr"><div style="width:${e}%;background:var(--early)"></div><div style="width:${r}%;background:${rateColor(r)}"></div><div style="width:${l}%;background:var(--late)"></div></div><span class="v">${pct(r)}</span></div>`};
+const bar=(name,t,tipName)=>{const r=rate(t);
+  return `<div class="row" data-tip="${esc(tipName||name)}: ${pct(r)} on time · ${num(t.n)} predictions"><span class="nm">${esc(name)}</span><div class="tr"><div style="width:${r}%;background:${rateColor(r)}"></div></div><span class="v">${pct(r)}</span></div>`};
 function periodBars(byPeriod){
   return byPeriod.map((t,i)=>t.n?bar(PERIODS[i][0],t):"").join("")||'<div class="empty">No data</div>';
 }
@@ -146,7 +148,7 @@ function periodSplit(byPeriod){
     return `<div class="row" data-tip="${PERIODS[i][0]}: early ${e.toFixed(1)}% · on time ${o.toFixed(1)}% · late ${l.toFixed(1)}% (${num(t.n)} predictions)"><span class="nm">${PERIODS[i][0]}</span><div class="tr" style="height:18px;background:none"><div style="width:${e}%;background:var(--early);border-radius:4px 0 0 4px"></div><div style="width:${o}%;background:var(--ok);border-radius:0"></div><div style="width:${l}%;background:var(--late)"></div></div><span class="v">${pct(o)}</span></div>`}).join("")
     +`<div class="legend"><span><i style="background:var(--early)"></i>Early</span><span><i style="background:var(--ok)"></i>On time</span><span><i style="background:var(--late)"></i>Late</span></div>`;
 }
-const scale='<div class="scale">60% or less<i></i>100% on time</div>';
+const scale='<div class="scale">50% or less<i></i>100% on time</div>';
 const chips=(id,labels,set)=>`<div class="chips" data-set="${id}">${labels.map((l,i)=>`<button data-i="${i}" class="${set.has(id.endsWith("days")?i+1:i)?"on":""}">${l}</button>`).join("")}</div>`;
 const areaSelect=(id,mode,val)=>{const a=[...new Set(D[mode].stops.map(s=>s.area).filter(Boolean))].sort();
   return a.length>1?`<div class="f"><label>Area</label><select id="${id}"><option value="">All areas</option>${a.map(x=>`<option${x===val?" selected":""}>${esc(x)}</option>`).join("")}</select></div>`:""};
@@ -169,11 +171,11 @@ function overview(mode){
   </div>
   <div class="grid">
     ${kpi(pct(rate(all)),T?"Train on time":"Bus on time","c4",all.n?rateColor(rate(all)):null)}
-    ${kpi(typical(mode,F,all),"Typically off by (minutes)","c4","var(--early)")}
+    ${kpi(typical(mode,F,all),"Typically off by (minutes)","c4","var(--line-c)")}
     ${kpi(num(all.n),"Predictions checked")}
     <div class="card c12"><h2>When the tracker is wrong, which way?</h2>${splitBar(all)}</div>
     <div class="card c8"><h2>On time by hour of day</h2>${hourChart(byHour)}</div>
-    <div class="card c4 vfill"><h2>Most accurate during</h2><div class="vgrow">${periodBars(byPeriod)}</div><div class="legend"><span><i style="background:var(--early)"></i>Early</span><span><i style="background:var(--ok)"></i>On time</span><span><i style="background:var(--late)"></i>Late</span></div></div>
+    <div class="card c4 vfill"><h2>Most accurate during</h2><div class="vgrow">${periodBars(byPeriod)}</div></div>
     <div class="card c6"><h2>Where are the reliable ${T?"platforms":"stops"}?</h2><div id="map-${mode}"></div>${scale}</div>
     <div class="card c6"><h2>${T?"Platforms by station":"Most to least reliable stops"}</h2><div class="scroll">${rank||'<div class="empty">No data</div>'}</div></div>
   </div>`;
@@ -186,7 +188,7 @@ function drawMap(mode,stops){
   const map=maps[mode]=L.map("map-"+mode,{scrollWheelZoom:false});
   L.tileLayer(dark?"https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}":"https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",{attribution:"Esri · © OpenStreetMap contributors",maxZoom:16}).addTo(map);
   const pts=stops.filter(s=>s.lat&&s.lon);
-  for(const s of pts)L.circleMarker([s.lat,s.lon],{radius:7,color:dark?"#1b1f23":"#fff",weight:2,fillColor:rateColor(s.r),fillOpacity:1})
+  for(const s of pts)L.circleMarker([s.lat,s.lon],{radius:7,color:dark?"#1b1f23":"#fff",weight:2,fillColor:mapColor(s.r),fillOpacity:1})
     .bindTooltip(`<b>${esc(s.label)}</b><br>${pct(s.r)} on time · ${num(s.n)} predictions`).addTo(map);
   if(pts.length){const bds=L.latLngBounds(pts.map(s=>[s.lat,s.lon]));
     map.setView(bds.getCenter(),Math.min(map.getBoundsZoom(bds,false,L.point(20,20))+1,15));}
@@ -210,7 +212,7 @@ function stopPage(mode){
   </div>
   <div class="grid">
     ${kpi(pct(rate(all)),`On time at ${W1}`,"c4",all.n?rateColor(rate(all)):null)}
-    ${kpi(typical(mode,F,all),"Typically off by (minutes)","c4","var(--early)")}
+    ${kpi(typical(mode,F,all),"Typically off by (minutes)","c4","var(--line-c)")}
     ${kpi(num(all.n),"Predictions checked","c4")}
     <div class="card c12"><h2>At ${W1}: early, on time or late?</h2>${splitBar(all)}</div>
     <div class="card c12"><h2>Early, on time or late by time of day</h2>${all.n?periodSplit(byPeriod):'<div class="empty">No data</div>'}</div>
