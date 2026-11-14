@@ -2,6 +2,15 @@
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Can you trust the CTA trackers?</title>
+<meta name="description" content="Live accuracy of CTA train and bus arrival predictions in downtown Chicago, scored against when vehicles actually arrived. Updated hourly.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://yilunr.github.io/cta-arrival-accuracy/">
+<meta property="og:title" content="Can you trust the CTA Train Tracker?">
+<meta property="og:description" content="Live accuracy of CTA arrival predictions in downtown Chicago, scored against when trains and buses actually arrived. Built on Databricks, updated hourly.">
+<meta property="og:image" content="https://yilunr.github.io/cta-arrival-accuracy/preview.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
 :root{color-scheme:light;--bg:#f6fafb;--card:#fff;--ink:#1b1f23;--ink2:#374151;--mut:#7d8793;--line:#e4e9ee;
@@ -23,7 +32,7 @@ nav button.on{background:var(--ink);color:var(--bg);font-weight:600}
 .chips{display:flex;gap:4px;flex-wrap:wrap}
 .chips button{border:1px solid var(--line);background:var(--card);color:var(--ink2);padding:5px 10px;border-radius:16px;cursor:pointer;font:13px system-ui}
 .chips button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
-select,input[list]{font:inherit;padding:7px 8px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);max-width:100%}
+select,#stop{font:inherit;padding:7px 8px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);max-width:100%}
 .grid{display:grid;gap:12px;grid-template-columns:repeat(12,1fr)}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;min-width:0}
 .c3{grid-column:span 3}.c4{grid-column:span 4}.c6{grid-column:span 6}.c8{grid-column:span 8}.c12{grid-column:span 12}
@@ -60,6 +69,18 @@ select,input[list]{font:inherit;padding:7px 8px;border-radius:8px;border:1px sol
 .empty{color:var(--mut);padding:24px 0;text-align:center}
 #tip{position:fixed;pointer-events:none;background:var(--ink);color:var(--bg);padding:6px 9px;border-radius:6px;font-size:12px;z-index:2000;display:none;max-width:260px}
 @media(max-width:900px){.c3,.c4,.c6,.c8{grid-column:span 12}.cols{height:130px}#map-train,#map-bus{height:360px}}
+@media(max-width:600px){
+ main{padding:12px 10px 40px}h1{font-size:20px}
+ nav{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}nav::-webkit-scrollbar{display:none}
+ nav button{white-space:nowrap;flex:0 0 auto;padding:7px 10px;font-size:14px}
+ .filters{position:static;gap:10px}.fhead{border:0;padding:0;flex-basis:100%}.fhead span br{display:none}
+ .chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.chips::-webkit-scrollbar{display:none}.chips button{flex:0 0 auto}
+ .grid>.kpi.c4{grid-column:span 4;padding:10px}.kpi b{font-size:22px}.kpi span{font-size:11px;display:block;line-height:1.25}
+ .tick{font-size:11px}
+ .split .lf{display:none}
+ .filters .f{min-width:0;max-width:100%}
+ .row{grid-template-columns:minmax(90px,40%) 1fr 38px;font-size:12px}
+}
 </style></head><body><main>
 <h1 id="title">Can you trust the CTA trackers?</h1>
 <p class="sub" id="sub">Loading…</p>
@@ -120,12 +141,12 @@ function typical(mode,f,all){
 const kpi=(v,l,c="c4",col)=>`<div class="card kpi ${c}"><b${col?` style="color:${col}"`:""}>${v}</b><span>${l}</span></div>`;
 function splitBar(t){
   if(!t.n)return '<div class="empty">No predictions match these filters.</div>';
-  const seg=(k,v,c)=>{const p=100*v/t.n;return `<div style="flex:${Math.max(p,.5)};background:var(--${c})" data-tip="${k}: ${p.toFixed(1)}% (${num(v)} predictions)">${p>=7?k+" "+Math.round(p)+"%":""}</div>`};
+  const seg=(k,v,c)=>{const p=100*v/t.n;return `<div style="flex:${Math.max(p,.5)};background:var(--${c})" data-tip="${k}: ${p.toFixed(1)}% (${num(v)} predictions)">${p>=7?`<span>${p<20?`<span class="lf">${k} </span>`:k+" "}${Math.round(p)}%</span>`:""}</div>`};
   return `<div class="split">${seg("Early",t.e,"early")}${seg("On time",t.n-t.e-t.l,"ok")}${seg("Late",t.l,"late")}</div>
   <div class="legend"><span><i style="background:var(--early)"></i>Early: came before the prediction</span><span><i style="background:var(--ok)"></i>On time</span><span><i style="background:var(--late)"></i>Late: came after the prediction</span></div>`;
 }
 function hourChart(byHour){
-  const W=480,H=150,PL=30,PB=16,PT=8,PR=8;
+  const W=480,H=150,PL=38,PB=16,PT=8,PR=8;
   const X=h=>PL+(W-PL-PR)*h/23, Y=r=>PT+(H-PT-PB)*(1-r/100);
   let grid="",lbl="",dots="",segs=[],cur=[];
   for(let v=0;v<=100;v+=25)grid+=`<line x1="${X(0)}" x2="${W-PR}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${PL-5}" y="${Y(v)+3}" text-anchor="end" class="tick">${v}%</text>`;
@@ -164,7 +185,7 @@ function overview(mode){
   }else rank=stops.sort((a,b)=>b.r-a.r).map(x=>bar(x.label,x.t)).join("");
   $("page").innerHTML=`
   <div class="filters">
-    <div class="fhead"><b>🔍 Filters</b><span>apply to every chart<br>on this page</span></div>
+    <div class="fhead"><b>🔍 Filters</b><span>apply to every chart <br>on this page</span></div>
     ${areaSelect("area",mode,s.area)}
     <div class="f"><label>Days of week</label>${chips(mode+"-days",DAYS,s.days)}</div>
     <div class="f"><label>Time of day</label>${chips(mode+"-periods",PERIODS.map(p=>p[0]),s.periods)}</div>
@@ -205,7 +226,7 @@ function stopPage(mode){
   const routes=Object.entries(agg).map(([name,t])=>({name,t,r:rate(t)})).filter(x=>x.t.n>0).sort((a,b)=>b.r-a.r);
   $("page").innerHTML=`
   <div class="filters">
-    <div class="fhead"><b>🔍 Filters</b><span>apply to every chart<br>on this page</span></div>
+    <div class="fhead"><b>🔍 Filters</b><span>apply to every chart <br>on this page</span></div>
     ${areaSelect("stop-area",mode,s.stopArea)}
     <div class="f combo" style="flex:1;min-width:240px"><label>${T?"Platform":"Stop"} · click to pick or type to search</label><input id="stop" autocomplete="off" style="width:100%" value="${s.stop==null?ALLW:esc(m.stops[s.stop].label)}"><div id="clist" class="clist" hidden></div></div>
     <div class="f"><label>Days of week</label>${chips(mode+"-stopdays",DAYS,s.stopDays)}</div>
