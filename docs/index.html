@@ -45,7 +45,13 @@ select,input[list]{font:inherit;padding:7px 8px;border-radius:8px;border:1px sol
 .row .v{text-align:right;font-variant-numeric:tabular-nums}
 .vfill{display:flex;flex-direction:column}.vfill .vgrow{flex:1;display:flex;flex-direction:column;justify-content:space-evenly}
 .vfill .tr{height:20px}
-.grp{font-size:12px;font-weight:600;color:var(--ink2);margin:10px 0 2px}
+.grp{font-size:14px;font-weight:700;color:var(--ink);margin:14px 0 4px;padding-bottom:4px;border-bottom:1px solid var(--line)}
+.grp:first-child{margin-top:2px}
+.gi{padding-left:12px}
+.combo{position:relative}
+.clist{position:absolute;top:100%;left:0;right:0;z-index:1200;background:var(--card);border:1px solid var(--line);border-radius:8px;max-height:280px;overflow:auto;box-shadow:0 8px 20px #0003}
+.clist .ci{padding:7px 10px;cursor:pointer;font-size:13.5px}
+.clist .ci:hover{background:var(--chip)}
 .scroll{max-height:520px;overflow:auto;padding-right:6px}
 #map-train,#map-bus{height:540px;border-radius:8px}
 .scale{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mut);margin-top:8px}
@@ -74,8 +80,8 @@ const PERIODS=[["Overnight (12–5 AM)",0,5],["Early morning (5–7 AM)",5,7],["
 const MIN_N=30; // hide stops with too few predictions to be meaningful
 const PAGES=[["train","🚆 Train overview"],["train-stop","🚆 Check your train platform"],["bus","🚌 Bus overview"],["bus-stop","🚌 Check your bus stop"],["quality","🔧 Data quality"]];
 let D=null,page="train",maps={};
-const S={train:{days:new Set(),periods:new Set(),area:"",stop:0,stopArea:"",stopDays:new Set()},
-         bus:{days:new Set(),periods:new Set(),area:"",stop:0,stopArea:"",stopDays:new Set()}};
+const S={train:{days:new Set(),periods:new Set(),area:"",stop:null,stopArea:"",stopDays:new Set()},
+         bus:{days:new Set(),periods:new Set(),area:"",stop:null,stopArea:"",stopDays:new Set()}};
 
 // Fixed colour scale for on-time rate: 60% and below = amber, 80% = light green, 100% = dark green.
 const mix=(a,b,t)=>"#"+[0,2,4].map(i=>Math.round(parseInt(a.slice(i+1,i+3),16)*(1-t)+parseInt(b.slice(i+1,i+3),16)*t).toString(16).padStart(2,"0")).join("");
@@ -152,14 +158,14 @@ function overview(mode){
   let rank;
   if(T){ // grouped by station, platforms of one station next to each other
     const g={};for(const x of stops.sort((a,b)=>a.label.localeCompare(b.label)))(g[x.label.split(" (")[0]]??=[]).push(x);
-    rank=Object.entries(g).map(([st,xs])=>`<div class="grp">${esc(st)}</div>`+xs.map(x=>bar(x.label.includes(" (")?x.label.slice(x.label.indexOf(" (")+2,-1):x.label,x.t,x.label)).join("")).join("");
+    rank=Object.entries(g).map(([st,xs])=>`<div class="grp">${esc(st)}</div><div class="gi">`+xs.map(x=>bar(x.label.includes(" (")?x.label.slice(x.label.indexOf(" (")+2,-1):x.label,x.t,x.label)).join("")+`</div>`).join("");
   }else rank=stops.sort((a,b)=>b.r-a.r).map(x=>bar(x.label,x.t)).join("");
   $("page").innerHTML=`
   <div class="filters">
     <div class="fhead"><b>🔍 Filters</b><span>apply to every chart<br>on this page</span></div>
     ${areaSelect("area",mode,s.area)}
     <div class="f"><label>Days of week</label>${chips(mode+"-days",DAYS,s.days)}</div>
-    <div class="f"><label>Time of day</label>${chips(mode+"-periods",PERIODS.map(p=>p[0].split(" (")[0]),s.periods)}</div>
+    <div class="f"><label>Time of day</label>${chips(mode+"-periods",PERIODS.map(p=>p[0]),s.periods)}</div>
   </div>
   <div class="grid">
     ${kpi(pct(rate(all)),T?"Train on time":"Bus on time","c4",all.n?rateColor(rate(all)):null)}
@@ -188,25 +194,28 @@ function drawMap(mode,stops){
 function stopPage(mode){
   const s=S[mode],m=D[mode],T=mode==="train";
   const list=m.stops.map((x,i)=>({...x,i})).filter(x=>!s.stopArea||x.area===s.stopArea);
-  if(!list.some(x=>x.i===s.stop))s.stop=list[0]?.i??0;
-  window.__lbl=new Map(list.map(x=>[x.label,x.i]));
-  const F={days:s.stopDays,stop:s.stop},{all,byHour,byPeriod}=summarize(rowsFor(mode,F));
-  const routes=m.routes.filter(r=>r[0]===s.stop&&r[2]>0).map(r=>({name:r[1],t:{n:r[2],e:r[3],l:r[4]},r:100*(r[2]-r[3]-r[4])/r[2]})).sort((a,b)=>b.r-a.r);
+  if(s.stop!=null&&!list.some(x=>x.i===s.stop))s.stop=null;
+  window.__list=list;const ALLW=T?"All platforms":"All stops";window.__all=ALLW;
+  const W1=s.stop==null?(T?"all platforms":"all stops"):(T?"this platform":"this stop");
+  const F={days:s.stopDays,stop:s.stop,area:s.stop==null?s.stopArea:""},{all,byHour,byPeriod}=summarize(rowsFor(mode,F));
+  const sel=s.stop==null?new Set(list.map(x=>x.i)):new Set([s.stop]);
+  const agg={};for(const r of m.routes){if(!sel.has(r[0]))continue;const a=agg[r[1]]??={n:0,e:0,l:0};a.n+=r[2];a.e+=r[3];a.l+=r[4]}
+  const routes=Object.entries(agg).map(([name,t])=>({name,t,r:rate(t)})).filter(x=>x.t.n>0).sort((a,b)=>b.r-a.r);
   $("page").innerHTML=`
   <div class="filters">
     <div class="fhead"><b>🔍 Filters</b><span>apply to every chart<br>on this page</span></div>
     ${areaSelect("stop-area",mode,s.stopArea)}
-    <div class="f" style="flex:1;min-width:220px"><label>${T?"Platform":"Stop"} · type to search</label><input id="stop" list="dl-stop" autocomplete="off" style="width:100%" value="${esc(m.stops[s.stop].label)}"><datalist id="dl-stop">${list.map(x=>`<option value="${esc(x.label)}"></option>`).join("")}</datalist></div>
+    <div class="f combo" style="flex:1;min-width:240px"><label>${T?"Platform":"Stop"} · click to pick or type to search</label><input id="stop" autocomplete="off" style="width:100%" value="${s.stop==null?ALLW:esc(m.stops[s.stop].label)}"><div id="clist" class="clist" hidden></div></div>
     <div class="f"><label>Days of week</label>${chips(mode+"-stopdays",DAYS,s.stopDays)}</div>
   </div>
   <div class="grid">
-    ${kpi(pct(rate(all)),`On time at this ${T?"platform":"stop"}`,"c4",all.n?rateColor(rate(all)):null)}
+    ${kpi(pct(rate(all)),`On time at ${W1}`,"c4",all.n?rateColor(rate(all)):null)}
     ${kpi(typical(mode,F,all),"Typically off by (minutes)","c4","var(--early)")}
     ${kpi(num(all.n),"Predictions checked","c4")}
-    <div class="card c12"><h2>At this ${T?"platform":"stop"}: early, on time or late?</h2>${splitBar(all)}</div>
+    <div class="card c12"><h2>At ${W1}: early, on time or late?</h2>${splitBar(all)}</div>
     <div class="card c12"><h2>Early, on time or late by time of day</h2>${all.n?periodSplit(byPeriod):'<div class="empty">No data</div>'}</div>
     <div class="card c6"><h2>On time by hour of day</h2>${hourChart(byHour)}</div>
-    <div class="card c6"><h2>${T?"Lines at this platform":"Routes at this stop"}, most reliable first</h2>${routes.map(r=>bar(r.name,r.t)).join("")||'<div class="empty">No data</div>'}<p class="sub" style="font-size:12px;margin:8px 0 0">All days; the day filter does not apply to this chart.</p></div>
+    <div class="card c6"><h2>${T?"Lines":"Routes"} at ${W1}, most reliable first</h2>${routes.map(r=>bar(r.name,r.t)).join("")||'<div class="empty">No data</div>'}<p class="sub" style="font-size:12px;margin:8px 0 0">All days; the day filter does not apply to this chart.</p></div>
   </div>`;
 }
 function quality(){
@@ -231,8 +240,16 @@ document.addEventListener("click",e=>{
     set.has(v)?set.delete(v):set.add(v);render()}
 });
 document.addEventListener("change",e=>{const mode=page.split("-")[0],s=S[mode];
-  if(e.target.id==="area")s.area=e.target.value;else if(e.target.id==="stop-area")s.stopArea=e.target.value;else if(e.target.id==="stop"){const i=window.__lbl?.get(e.target.value);if(i==null)return;s.stop=i}else return;render()});
-document.addEventListener("focusin",e=>{if(e.target.id==="stop")e.target.select()});
+  if(e.target.id==="area")s.area=e.target.value;else if(e.target.id==="stop-area")s.stopArea=e.target.value;else return;render()});
+function comboBuild(q){const dl=$("clist");if(!dl)return;
+  const items=[{label:window.__all,i:""},...window.__list.map(x=>({label:x.label,i:x.i}))],ql=(q||"").toLowerCase();
+  dl.innerHTML=items.filter(x=>!ql||x.label.toLowerCase().includes(ql)).map(x=>`<div class="ci" data-i="${x.i}">${esc(x.label)}</div>`).join("")||'<div class="ci off">No match</div>';
+  dl.hidden=false}
+document.addEventListener("focusin",e=>{if(e.target.id==="stop"){e.target.select();comboBuild("")}});
+document.addEventListener("input",e=>{if(e.target.id==="stop")comboBuild(e.target.value)});
+document.addEventListener("mousedown",e=>{const o=e.target.closest(".ci"),dl=$("clist");
+  if(o&&!o.classList.contains("off")){e.preventDefault();const s=S[page.split("-")[0]];s.stop=o.dataset.i===""?null:+o.dataset.i;render();return}
+  if(dl&&!e.target.closest(".combo"))dl.hidden=true});
 document.addEventListener("mousemove",e=>{const t=e.target.closest("[data-tip]"),tip=$("tip");
   if(!t){tip.style.display="none";return}tip.textContent=t.dataset.tip;tip.style.display="block";
   tip.style.left=Math.min(e.clientX+12,innerWidth-tip.offsetWidth-8)+"px";tip.style.top=(e.clientY+14)+"px"});
