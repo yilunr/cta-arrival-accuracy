@@ -18,6 +18,8 @@ nav button{border:0;background:none;color:var(--ink2);padding:8px 14px;border-ra
 nav button.on{background:var(--ink);color:var(--bg);font-weight:600}
 .filters{position:sticky;top:0;z-index:900;background:var(--bg);padding:8px 0 10px;display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end;border-bottom:1px solid var(--line);margin-bottom:14px}
 .f label{display:block;font-size:12px;color:var(--mut);margin-bottom:4px}
+.fhead{border-right:1px solid var(--line);padding-right:16px}
+.fhead b{display:block;font-size:13px}.fhead span{font-size:11.5px;color:var(--mut)}
 .chips{display:flex;gap:4px;flex-wrap:wrap}
 .chips button{border:1px solid var(--line);background:var(--card);color:var(--ink2);padding:5px 10px;border-radius:16px;cursor:pointer;font:13px system-ui}
 .chips button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
@@ -25,6 +27,7 @@ select{font:inherit;padding:7px 8px;border-radius:8px;border:1px solid var(--lin
 .grid{display:grid;gap:12px;grid-template-columns:repeat(12,1fr)}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;min-width:0}
 .c3{grid-column:span 3}.c4{grid-column:span 4}.c6{grid-column:span 6}.c8{grid-column:span 8}.c12{grid-column:span 12}
+.tick{font-size:9px;fill:var(--mut)}
 .kpi b{display:block;font-size:34px;line-height:1.1;font-weight:650}.kpi span{color:var(--mut);font-size:13px}
 .split{display:flex;height:34px;border-radius:6px;overflow:hidden;gap:2px}
 .split div{display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:600;min-width:0;overflow:hidden;white-space:nowrap}
@@ -40,6 +43,8 @@ select{font:inherit;padding:7px 8px;border-radius:8px;border:1px solid var(--lin
 .row .tr{background:var(--chip);border-radius:4px;height:14px;overflow:hidden;display:flex;gap:2px}
 .row .tr div{height:100%;border-radius:0 4px 4px 0}
 .row .v{text-align:right;font-variant-numeric:tabular-nums}
+.vfill{display:flex;flex-direction:column}.vfill .vgrow{flex:1;display:flex;flex-direction:column;justify-content:space-evenly}
+.vfill .tr{height:20px}
 .grp{font-size:12px;font-weight:600;color:var(--ink2);margin:10px 0 2px}
 .scroll{max-height:520px;overflow:auto;padding-right:6px}
 #map-train,#map-bus{height:540px;border-radius:8px}
@@ -113,11 +118,18 @@ function splitBar(t){
   <div class="legend"><span><i style="background:var(--early)"></i>Early: came before the prediction</span><span><i style="background:var(--ok)"></i>On time</span><span><i style="background:var(--late)"></i>Late: came after the prediction</span></div>`;
 }
 function hourChart(byHour){
-  let b="",l="";
+  const W=480,H=150,PL=30,PB=16,PT=8,PR=8;
+  const X=h=>PL+(W-PL-PR)*h/23, Y=r=>PT+(H-PT-PB)*(1-r/100);
+  let grid="",lbl="",dots="",segs=[],cur=[];
+  for(let v=0;v<=100;v+=25)grid+=`<line x1="${X(0)}" x2="${W-PR}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${PL-5}" y="${Y(v)+3}" text-anchor="end" class="tick">${v}%</text>`;
+  for(let h=0;h<24;h+=3)lbl+=`<text x="${X(h)}" y="${H-2}" text-anchor="middle" class="tick">${h12(h).replace(" ","")}</text>`;
   for(let h=0;h<24;h++){const t=byHour[h],r=t?rate(t):null;
-    b+=`<div class="col" data-tip="${h12(h)}: ${r==null?"no data":pct(r)+" on time · "+num(t.n)+" predictions"}"><div style="height:${r??0}%;background:${r==null?"transparent":rateColor(r)}"></div></div>`;
-    l+=`<span>${h%3==0?h12(h):""}</span>`}
-  return `<div class="cols">${b}</div><div class="xl">${l}</div>`;
+    if(r==null){if(cur.length){segs.push(cur);cur=[]}continue}
+    cur.push([X(h),Y(r)]);
+    dots+=`<circle cx="${X(h)}" cy="${Y(r)}" r="8" fill="transparent" data-tip="${h12(h)}: ${pct(r)} on time · ${num(t.n)} predictions"/><circle cx="${X(h)}" cy="${Y(r)}" r="3.2" fill="${rateColor(r)}" pointer-events="none"/>`}
+  if(cur.length)segs.push(cur);
+  const line=segs.map(sg=>sg.length>1?`<polyline points="${sg.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join(" ")}" fill="none" stroke="var(--ok)" stroke-width="2" stroke-linejoin="round"/>`:"").join("");
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${grid}${line}${dots}${lbl}</svg>`;
 }
 const bar=(name,r,n,tipName)=>`<div class="row" data-tip="${esc(tipName||name)}: ${pct(r)} on time · ${num(n)} predictions"><span class="nm">${esc(name)}</span><div class="tr"><div style="width:${r}%;background:${rateColor(r)}"></div></div><span class="v">${pct(r)}</span></div>`;
 function periodBars(byPeriod){
@@ -144,6 +156,7 @@ function overview(mode){
   }else rank=stops.sort((a,b)=>b.r-a.r).map(x=>bar(x.label,x.r,x.n)).join("");
   $("page").innerHTML=`
   <div class="filters">
+    <div class="fhead"><b>🔍 Filters</b><span>apply to every chart<br>on this page</span></div>
     <div class="f"><label>Days of week</label>${chips(mode+"-days",DAYS,s.days)}</div>
     <div class="f"><label>Time of day</label>${chips(mode+"-periods",PERIODS.map(p=>p[0].split(" (")[0]),s.periods)}</div>
     ${areaSelect("area",mode,s.area)}
@@ -153,8 +166,8 @@ function overview(mode){
     ${kpi(typical(mode,F,all),"Typically off by (minutes)")}
     ${kpi(num(all.n),"Predictions checked")}
     <div class="card c12"><h2>When the tracker is wrong, which way?</h2>${splitBar(all)}</div>
-    <div class="card c8"><h2>On time by hour of day</h2>${hourChart(byHour)}${scale}</div>
-    <div class="card c4"><h2>Most accurate during</h2>${periodBars(byPeriod)}</div>
+    <div class="card c8"><h2>On time by hour of day</h2>${hourChart(byHour)}</div>
+    <div class="card c4 vfill"><h2>Most accurate during</h2><div class="vgrow">${periodBars(byPeriod)}</div></div>
     <div class="card c6"><h2>Where are the reliable ${T?"platforms":"stops"}?</h2><div id="map-${mode}"></div>${scale}</div>
     <div class="card c6"><h2>${T?"Platforms by station":"Most to least reliable stops"}</h2><div class="scroll">${rank||'<div class="empty">No data</div>'}</div></div>
   </div>`;
@@ -169,7 +182,8 @@ function drawMap(mode,stops){
   const pts=stops.filter(s=>s.lat&&s.lon);
   for(const s of pts)L.circleMarker([s.lat,s.lon],{radius:7,color:dark?"#1b1f23":"#fff",weight:2,fillColor:rateColor(s.r),fillOpacity:1})
     .bindTooltip(`<b>${esc(s.label)}</b><br>${pct(s.r)} on time · ${num(s.n)} predictions`).addTo(map);
-  if(pts.length)map.fitBounds(pts.map(s=>[s.lat,s.lon]),{padding:[24,24]});
+  if(pts.length){const bds=L.latLngBounds(pts.map(s=>[s.lat,s.lon]));
+    map.setView(bds.getCenter(),Math.min(map.getBoundsZoom(bds,false,L.point(20,20))+1,15));}
 }
 function stopPage(mode){
   const s=S[mode],m=D[mode],T=mode==="train";
@@ -179,6 +193,7 @@ function stopPage(mode){
   const routes=m.routes.filter(r=>r[0]===s.stop&&r[2]>0).map(r=>({name:r[1],n:r[2],r:100*(r[2]-r[3]-r[4])/r[2]})).sort((a,b)=>b.r-a.r);
   $("page").innerHTML=`
   <div class="filters">
+    <div class="fhead"><b>🔍 Filters</b><span>apply to every chart<br>on this page</span></div>
     ${areaSelect("stop-area",mode,s.stopArea)}
     <div class="f" style="flex:1;min-width:220px"><label>${T?"Platform":"Stop"}</label><select id="stop" style="width:100%">${list.map(x=>`<option value="${x.i}"${x.i===s.stop?" selected":""}>${esc(x.label)}</option>`).join("")}</select></div>
     <div class="f"><label>Days of week</label>${chips(mode+"-stopdays",DAYS,s.stopDays)}</div>
@@ -189,7 +204,7 @@ function stopPage(mode){
     ${kpi(num(all.n),"Predictions checked","c4")}
     <div class="card c12"><h2>At this ${T?"platform":"stop"}: early, on time or late?</h2>${splitBar(all)}</div>
     <div class="card c12"><h2>Early, on time or late by time of day</h2>${all.n?periodSplit(byPeriod):'<div class="empty">No data</div>'}</div>
-    <div class="card c6"><h2>On time by hour of day</h2>${hourChart(byHour)}${scale}</div>
+    <div class="card c6"><h2>On time by hour of day</h2>${hourChart(byHour)}</div>
     <div class="card c6"><h2>${T?"Lines at this platform":"Routes at this stop"}, most reliable first</h2>${routes.map(r=>bar(r.name,r.r,r.n)).join("")||'<div class="empty">No data</div>'}<p class="sub" style="font-size:12px;margin:8px 0 0">All days; the day filter does not apply to this chart.</p></div>
   </div>`;
 }
