@@ -266,7 +266,10 @@ function render(){
   if(page!=="quality")MODE=page.split("-")[0];
   $("nav").innerHTML=PAGES.map(([k,l])=>`<button data-p="${k}" class="${k===page?"on":""}">${l}</button>`).join("");
   $("title").textContent={train:"🚆 Can you trust the Train Tracker?","train-stop":"🚆 Check your train platform",bus:"🚌 Can you trust the Bus Tracker?","bus-stop":"🚌 Check your bus stop",quality:"🔧 Is the data trustworthy?"}[page];
-  $("sub").textContent=`Live accuracy of CTA arrival predictions in downtown Chicago · last ${D.window_days} days · updated ${D.updated}`;
+  const areaList=m=>{const x=[...new Set(D[m].stops.map(s=>s.area).filter(Boolean))].sort().map(v=>v==="Loop"?"the Loop":v);return x.length?x.join(", ").replace(/, ([^,]*)$/, " & $1"):"downtown Chicago"};
+  $("sub").textContent=page==="quality"
+    ?`Live accuracy of CTA arrival predictions in downtown Chicago · last ${D.window_days} days · updated ${D.updated}`
+    :`Live accuracy of CTA ${MODE} arrival predictions · covering ${areaList(MODE)} · last ${D.window_days} days · updated ${D.updated}`;
   if(page==="quality")quality();else if(page.endsWith("-stop"))stopPage(page.split("-")[0]);else overview(page);
 }
 document.addEventListener("click",e=>{
