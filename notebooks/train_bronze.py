@@ -410,6 +410,8 @@ print(f"Auto Loader appended {bronze_rows} rows to {TBL_TRAIN_BRONZE_PREDICTIONS
 # COMMAND ----------
 
 # DBTITLE 1,Log the run
+if POLLS_PER_RUN == 0:  # load_landing runs this notebook only for discovery + Auto Loader
+    dbutils.notebook.exit("load-only")
 status = "failed" if api_calls and failed_calls >= api_calls else ("partial" if failed_calls else "success")
 run_row = [(
     run_id, started_at, datetime.now(timezone.utc), status, len(active_stations), POLLS_PER_RUN,

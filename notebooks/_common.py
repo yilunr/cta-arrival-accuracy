@@ -96,8 +96,8 @@ MAX_STOPS_PER_CALL = 10  # getpredictions accepts at most 10 stop IDs per reques
 # --- Arrival detection ---------------------------------------------------------------------
 # A bus "arrived" when it drops out of a stop's predictions between two polls. We only trust that
 # when the next poll came soon enough to bracket the arrival, and the bus was close on its last sighting.
-MAX_NEXT_POLL_GAP_SEC = 180       # next poll must follow within 3 min (works for 1- or 2-min polling)
-ARRIVAL_MAX_DISTANCE_FT = 1500    # last sighting within ~1-2 min of downtown bus travel
+MAX_NEXT_POLL_GAP_SEC = 270       # next poll must follow within 4.5 min (2-3 min polling plus start-up delay)
+ARRIVAL_MAX_DISTANCE_FT = 2500    # last sighting can be up to one poll away
 VISIT_SPLIT_GAP_MIN = 15          # fallback: split a vehicle's visits to a stop if unseen this long
 
 # --- Accuracy metrics ----------------------------------------------------------------------
@@ -349,7 +349,7 @@ TRAIN_STOPS_URL = "https://data.cityofchicago.org/resource/8pix-ypme.json"
 # --- Arrival detection ---------------------------------------------------------------------
 # Trains report no distance, so "close on its last sighting" means: Train Tracker was showing
 # Approaching/Due, or the last prediction put the train within this many minutes of the platform.
-TRAIN_ARRIVAL_MAX_LAST_WAIT_MIN = 3.0
+TRAIN_ARRIVAL_MAX_LAST_WAIT_MIN = 4.0
 # Predictions flagged isSch come from the timetable, not a live train. They are kept in
 # silver.train_predictions but left out of arrivals and scoring unless this is True.
 TRAIN_SCORE_SCHEDULED = False
