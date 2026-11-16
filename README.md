@@ -22,7 +22,7 @@ Built on Databricks Free Edition with a bronze → silver → gold pipeline and 
 | Job | Schedule | Tasks |
 |---|---|---|
 | Ingest | every 2 minutes | `poll_cta`: calls both APIs in parallel and saves the raw responses as JSON files in a volume. No Spark work, so each run is cheap. |
-| Transform | hourly at :10 | `load_landing` → (`train_silver` → `train_gold` → `publish_site`) and (`silver` → `gold`) |
+| Transform | hourly at :10 | `load_landing` → (`train_silver` → `train_gold`) and (`silver` → `gold`) in parallel → `publish_site` once both are done |
 
 | Step | What happens |
 |---|---|
