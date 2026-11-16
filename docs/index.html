@@ -101,6 +101,8 @@ const PERIODS=[["Overnight (12–5 AM)",0,5],["Early morning (5–7 AM)",5,7],["
 const MIN_N=30; // hide stops with too few predictions to be meaningful
 const PAGES=[["train","🚆 Train overview"],["train-stop","🚆 Check your train platform"],["bus","🚌 Bus overview"],["bus-stop","🚌 Check your bus stop"],["quality","🔧 Data quality"]];
 let D=null,page="train",maps={};
+const TOL={train:2,bus:3}; // minutes: trains on time within 2 min, buses within 3 (same as the pipeline)
+let MODE="train";
 const S={train:{days:new Set(),periods:new Set(),area:"",stop:null,stopArea:"",stopDays:new Set()},
          bus:{days:new Set(),periods:new Set(),area:"",stop:null,stopArea:"",stopDays:new Set()}};
 
@@ -143,7 +145,7 @@ function splitBar(t){
   if(!t.n)return '<div class="empty">No predictions match these filters.</div>';
   const seg=(k,v,c)=>{const p=100*v/t.n;return `<div style="flex:${Math.max(p,.5)};background:var(--${c})" data-tip="${k}: ${p.toFixed(1)}% (${num(v)} predictions)">${p>=7?`<span>${p<20?`<span class="lf">${k} </span>`:k+" "}${Math.round(p)}%</span>`:""}</div>`};
   return `<div class="split">${seg("Early",t.e,"early")}${seg("On time",t.n-t.e-t.l,"ok")}${seg("Late",t.l,"late")}</div>
-  <div class="legend"><span><i style="background:var(--early)"></i>Early: came before the prediction</span><span><i style="background:var(--ok)"></i>On time</span><span><i style="background:var(--late)"></i>Late: came after the prediction</span></div>`;
+  <div class="legend"><span><i style="background:var(--early)"></i>Early: came more than ${TOL[MODE]} min before the prediction</span><span><i style="background:var(--ok)"></i>On time: within ${TOL[MODE]} min</span><span><i style="background:var(--late)"></i>Late: came more than ${TOL[MODE]} min after the prediction</span></div>`;
 }
 function hourChart(byHour){
   const W=480,H=150,PL=38,PB=16,PT=8,PR=8;
@@ -167,7 +169,7 @@ function periodBars(byPeriod){
 function periodSplit(byPeriod){
   return byPeriod.map((t,i)=>{if(!t.n)return "";const e=100*t.e/t.n,l=100*t.l/t.n,o=100-e-l;
     return `<div class="row" data-tip="${PERIODS[i][0]}: early ${e.toFixed(1)}% · on time ${o.toFixed(1)}% · late ${l.toFixed(1)}% (${num(t.n)} predictions)"><span class="nm">${PERIODS[i][0]}</span><div class="tr" style="height:18px;background:none"><div style="width:${e}%;background:var(--early);border-radius:4px 0 0 4px"></div><div style="width:${o}%;background:var(--ok);border-radius:0"></div><div style="width:${l}%;background:var(--late)"></div></div><span class="v">${pct(o)}</span></div>`}).join("")
-    +`<div class="legend"><span><i style="background:var(--early)"></i>Early</span><span><i style="background:var(--ok)"></i>On time</span><span><i style="background:var(--late)"></i>Late</span></div>`;
+    +`<div class="legend"><span><i style="background:var(--early)"></i>Early (more than ${TOL[MODE]} min)</span><span><i style="background:var(--ok)"></i>On time (within ${TOL[MODE]} min)</span><span><i style="background:var(--late)"></i>Late (more than ${TOL[MODE]} min)</span></div>`;
 }
 const scale='<div class="scale">50% or less<i></i>100% on time</div>';
 const chips=(id,labels,set)=>`<div class="chips" data-set="${id}">${labels.map((l,i)=>`<button data-i="${i}" class="${set.has(id.endsWith("days")?i+1:i)?"on":""}">${l}</button>`).join("")}</div>`;
@@ -191,7 +193,7 @@ function overview(mode){
     <div class="f"><label>Time of day</label>${chips(mode+"-periods",PERIODS.map(p=>p[0]),s.periods)}</div>
   </div>
   <div class="grid">
-    ${kpi(pct(rate(all)),T?"Train on time":"Bus on time","c4",all.n?rateColor(rate(all)):null)}
+    ${kpi(pct(rate(all)),`${T?"Train":"Bus"} on time (within ${TOL[mode]} min)`,"c4",all.n?rateColor(rate(all)):null)}
     ${kpi(typical(mode,F,all),"Typically off by (minutes)","c4","var(--line-c)")}
     ${kpi(num(all.n),"Predictions checked")}
     <div class="card c12"><h2>When the tracker is wrong, which way?</h2>${splitBar(all)}</div>
@@ -232,7 +234,7 @@ function stopPage(mode){
     <div class="f"><label>Days of week</label>${chips(mode+"-stopdays",DAYS,s.stopDays)}</div>
   </div>
   <div class="grid">
-    ${kpi(pct(rate(all)),`On time at ${W1}`,"c4",all.n?rateColor(rate(all)):null)}
+    ${kpi(pct(rate(all)),`On time at ${W1} (within ${TOL[mode]} min)`,"c4",all.n?rateColor(rate(all)):null)}
     ${kpi(typical(mode,F,all),"Typically off by (minutes)","c4","var(--line-c)")}
     ${kpi(num(all.n),"Predictions checked","c4")}
     <div class="card c12"><h2>At ${W1}: early, on time or late?</h2>${splitBar(all)}</div>
@@ -252,6 +254,7 @@ function quality(){
   $("page").innerHTML=`<p class="sub">A visit is <b>arrived</b> when we saw the bus or train reach the stop (only these are scored), <b>vanished</b> when it dropped out of the feed too far away, and <b>censored</b> when polling stopped before it got there.</p>`+block("train","🚆","Train")+block("bus","🚌","Bus");
 }
 function render(){
+  if(page!=="quality")MODE=page.split("-")[0];
   $("nav").innerHTML=PAGES.map(([k,l])=>`<button data-p="${k}" class="${k===page?"on":""}">${l}</button>`).join("");
   $("title").textContent={train:"🚆 Can you trust the Train Tracker?","train-stop":"🚆 Check your train platform",bus:"🚌 Can you trust the Bus Tracker?","bus-stop":"🚌 Check your bus stop",quality:"🔧 Is the data trustworthy?"}[page];
   $("sub").textContent=`Live accuracy of CTA arrival predictions in downtown Chicago · last ${D.window_days} days · updated ${D.updated}`;
