@@ -67,6 +67,8 @@ select,#stop{font:inherit;padding:7px 8px;border-radius:8px;border:1px solid var
 .scale i{flex:0 0 160px;height:8px;border-radius:4px;background:linear-gradient(90deg,var(--lo),var(--hi))}
 .note{color:var(--mut);font-size:12.5px;margin-top:18px;text-align:center}
 .empty{color:var(--mut);padding:24px 0;text-align:center}
+.cap{font-size:12px;color:var(--mut);margin:-4px 0 10px;line-height:1.45}
+.qp{font-size:13.5px;color:var(--ink2);margin:0 0 10px;line-height:1.55;max-width:900px}
 #tip{position:fixed;pointer-events:none;background:var(--ink);color:var(--bg);padding:6px 9px;border-radius:6px;font-size:12px;z-index:2000;display:none;max-width:260px}
 @media(max-width:900px){.c3,.c4,.c6,.c8{grid-column:span 12}.cols{height:130px}#map-train,#map-bus{height:360px}}
 @media(max-width:600px){
@@ -244,14 +246,21 @@ function stopPage(mode){
   </div>`;
 }
 function quality(){
-  const block=(k,icon,name)=>{const q=D.quality[k],v=q.days.reduce((a,d)=>a+d[1],0),ar=q.days.reduce((a,d)=>a+d[2],0);
+  const block=(k,icon,name)=>{const T2=k==="train",q=D.quality[k],v=q.days.reduce((a,d)=>a+d[1],0),ar=q.days.reduce((a,d)=>a+d[2],0);
     const mx=Math.max(1,...q.days.map(d=>d[2]+d[3]+d[4])),rm=Math.max(1,...q.runs.map(r=>r[1]+r[2]+r[3]));
-    const stack=(rows,max,cols,names,lab)=>`<div class="cols">${rows.map(r=>`<div class="col" data-tip="${lab(r)}: ${cols.map((c,i)=>names[i]+" "+num(r[c])).join(" · ")}">${cols.map((c,i)=>`<div style="height:${100*r[c]/max}%;background:${["var(--ok)","var(--warn)","var(--mut)","var(--bad)"][names[i]==="failed"?3:i]};border-radius:${i?0:"4px 4px 0 0"};margin-top:${i?2:0}px"></div>`).reverse().join("")}</div>`).join("")}</div><div class="xl">${rows.map(r=>`<span>${lab(r).slice(5)}</span>`).join("")}</div>`;
+    const stack=(rows,max,cols,names,lab)=>`<div class="cols">${rows.map(r=>{
+      const segs=cols.map((c,i)=>({v:r[c],bg:["var(--ok)","var(--warn)","var(--mut)","var(--bad)"][names[i]==="failed"?3:i]})).filter(x=>x.v>0).reverse();
+      return `<div class="col" data-tip="${lab(r)}: ${cols.map((c,i)=>names[i]+" "+num(r[c])).join(" · ")}">${segs.map((x,j)=>`<div style="height:${100*x.v/max}%;background:${x.bg};border-radius:${j?0:"4px 4px 0 0"};margin-top:${j?2:0}px"></div>`).join("")}</div>`}).join("")}</div><div class="xl">${rows.map(r=>`<span>${lab(r).slice(5)}</span>`).join("")}</div>`;
     return `<h3>${icon} ${name}</h3><div class="grid">
-    ${kpi(num(v),"Visits seen")}${kpi(num(ar)+(v?` <small style="font-size:15px;color:var(--mut)">(${Math.round(100*ar/v)}%)</small>`:""),"Confirmed arrivals")}${kpi(q.minutes_since_poll??"–","Minutes since last poll")}
-    <div class="card c6"><h2>How ${name.toLowerCase()} visits ended, by day</h2>${stack(q.days,mx,[2,3,4],["arrived","vanished","censored"],r=>r[0])}<div class="legend"><span><i style="background:var(--ok)"></i>Arrived</span><span><i style="background:var(--warn)"></i>Vanished</span><span><i style="background:var(--mut)"></i>Censored</span></div></div>
-    <div class="card c6"><h2>${name} ingestion runs per day (last 7 days)</h2>${stack(q.runs,rm,[1,2,3],["ok","partial","failed"],r=>r[0])}<div class="legend"><span><i style="background:var(--ok)"></i>OK</span><span><i style="background:var(--warn)"></i>Partial</span><span><i style="background:var(--bad)"></i>Failed</span></div></div></div>`};
-  $("page").innerHTML=`<p class="sub">A visit is <b>arrived</b> when we saw the bus or train reach the stop (only these are scored), <b>vanished</b> when it dropped out of the feed too far away, and <b>censored</b> when polling stopped before it got there.</p>`+block("train","🚆","Train")+block("bus","🚌","Bus");
+    ${kpi(num(v),`${name} visits seen (last ${D.window_days} days)`)}${kpi(num(ar)+(v?` <small style="font-size:15px;color:var(--mut)">(${Math.round(100*ar/v)}%)</small>`:""),"Confirmed arrivals · only these are scored")}${kpi(q.minutes_since_poll??"–","Minutes since last poll")}
+    <div class="card c6"><h2>How ${name.toLowerCase()} visits ended, by day</h2><p class="cap">The green share is what the accuracy numbers are built from; the rest is discarded, not guessed.</p>${stack(q.days,mx,[2,3,4],["arrived","vanished","censored"],r=>r[0])}<div class="legend"><span><i style="background:var(--ok)"></i>Arrived</span><span><i style="background:var(--warn)"></i>Vanished</span><span><i style="background:var(--mut)"></i>Censored</span></div></div>
+    <div class="card c6"><h2>${name} ingestion runs per day (last 7 days)</h2><p class="cap">One run = one poll of every ${name.toLowerCase()} ${T2?"platform":"stop"} we track, every 2 minutes. Partial = some API calls failed. Short bars or gaps mean polling paused — usually the free compute quota running out — and show up above as censored visits.</p>${stack(q.runs,rm,[1,2,3],["successful","partial","failed"],r=>r[0])}<div class="legend"><span><i style="background:var(--ok)"></i>Successful</span><span><i style="background:var(--warn)"></i>Partial</span><span><i style="background:var(--bad)"></i>Failed</span></div></div></div>`};
+  $("page").innerHTML=`<div class="card c12" style="margin-bottom:14px"><h2>How the accuracy numbers stay honest</h2>
+  <p class="qp">The CTA's APIs never report an arrival — only predictions. So every 2 minutes we poll the predicted arrivals for every stop we track, and when a vehicle drops off a stop's prediction list, we take the midpoint between its last sighting and the next poll as the moment it actually arrived. Each <b>visit</b> (one vehicle approaching one stop) then gets exactly one label:</p>
+  <p class="qp"><b style="color:var(--ok)">Arrived</b> — we saw it reach the stop: the next poll came within 4.5 minutes and the vehicle was close by on its last sighting. <b>Only these visits are scored.</b><br>
+  <b style="color:var(--warn)">Vanished</b> — it dropped out of the feed while still far away (rerouted, cancelled, reassigned). Not scored.<br>
+  <b style="color:var(--mut)">Censored</b> — polling paused or had a gap, so we never saw whether it arrived. Not scored.</p>
+  <p class="qp" style="margin-bottom:0">Uncertain visits are thrown out rather than guessed at, so gaps in polling shrink the sample — they cannot bend the accuracy numbers. This page shows how big that sample is and how fresh the data is, so you can judge the rest of the dashboard with open eyes.</p></div>`+block("train","🚆","Train")+block("bus","🚌","Bus");
 }
 function render(){
   if(page!=="quality")MODE=page.split("-")[0];
