@@ -192,7 +192,7 @@ function hourChart(byHour){
   for(const [name,h0,h1] of [["AM rush",7,9],["PM rush",15,18]]){const x0=Math.max(PL,X(h0)-step/2),x1=X(h1)+step/2;
     grid+=`<rect x="${x0}" y="${PT}" width="${x1-x0}" height="${H-PT-PB}" fill="var(--line-c)" opacity=".12"/><text x="${(x0+x1)/2}" y="${PT-5}" text-anchor="middle" class="tick" style="font-weight:600">${name}</text>`}
   for(let v=lo;v<=100;v+=gs)grid+=`<line x1="${PL}" x2="${W-PR}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${PL-5}" y="${Y(v)+3}" text-anchor="end" class="tick">${v}%</text>`;
-  if(tot.n){const a=rate(tot);grid+=`<line x1="${PL}" x2="${W-PR}" y1="${Y(a)}" y2="${Y(a)}" stroke="var(--mut)" stroke-dasharray="4 3"/><text x="${W-PR}" y="${Y(a)-4}" text-anchor="end" class="tick" style="font-weight:600">average ${pct(a)}</text>`}
+  if(tot.n){const a=rate(tot);grid+=`<line x1="${PL}" x2="${W-PR}" y1="${Y(a)}" y2="${Y(a)}" stroke="var(--mut)" stroke-dasharray="4 3"/><text x="${W-PR}" y="${Y(a)-4}" text-anchor="end" class="tick" style="font-weight:600" stroke="var(--card)" stroke-width="3" paint-order="stroke">average ${pct(a)}</text>`}
   for(let k=0;k<24;k+=3){const h=(k+7)%24;lbl+=`<text x="${X(h)}" y="${H-2}" text-anchor="middle" class="tick">${h12(h).replace(" ","")}</text>`}
   for(let k=0;k<24;k++){const h=(k+7)%24,t=byHour[h],r=t?rate(t):null;
     if(r==null){if(cur.length){segs.push(cur);cur=[]}continue}
