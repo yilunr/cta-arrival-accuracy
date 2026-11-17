@@ -55,7 +55,20 @@ select,#stop{font:inherit;padding:7px 8px;border-radius:8px;border:1px solid var
 .vfill{display:flex;flex-direction:column}.vfill .vgrow{flex:1;display:flex;flex-direction:column;justify-content:space-evenly}
 .vfill .tr{height:20px}
 .grp{font-size:14px;font-weight:700;color:var(--ink);margin:14px 0 4px;padding-bottom:4px;border-bottom:1px solid var(--line)}
-.grp:first-child{margin-top:2px}
+.sg:first-child .grp{margin-top:2px}
+[hidden]{display:none!important}
+.freset{font:13px system-ui;padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink2);cursor:pointer;white-space:nowrap}
+.freset:disabled{opacity:.45;cursor:default}
+.ld{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:3px}
+@media(prefers-color-scheme:dark){.ld{box-shadow:0 0 0 1px #ffffff50}}
+.lds{display:inline-block;margin-right:5px;white-space:nowrap}
+.stq{width:100%;font:inherit;font-size:13.5px;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);margin:0 0 8px}
+.lns{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 8px}
+.lns button{font:12px system-ui;color:var(--ink2);background:none;border:1px solid var(--line);border-radius:12px;padding:3px 9px 3px 7px;cursor:pointer}
+.lns button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.lns .lds{margin-right:4px}
+#strank{max-height:470px}
+.filters select,.filters #stop,.filters .chips button,.freset{height:36px}.filters .chips button{border-radius:18px}
 .gi{padding-left:12px}
 .combo{position:relative}
 .clist{position:absolute;top:100%;left:0;right:0;z-index:1200;background:var(--card);border:1px solid var(--line);border-radius:8px;max-height:280px;overflow:auto;box-shadow:0 8px 20px #0003}
@@ -82,6 +95,7 @@ select,#stop{font:inherit;padding:7px 8px;border-radius:8px;border:1px solid var
  .split .lf{display:none}
  .filters .f{min-width:0;max-width:100%}
  .row{grid-template-columns:minmax(90px,40%) 1fr 38px;font-size:12px}
+ .stq,#stop,.filters select{font-size:16px}
 }
 </style></head><body><main>
 <h1 id="title">Can you trust the CTA trackers?</h1>
@@ -105,8 +119,10 @@ const PAGES=[["train","🚆 Train overview"],["train-stop","🚆 Check your trai
 let D=null,page="train",maps={};
 const TOL={train:2,bus:3}; // minutes: trains on time within 2 min, buses within 3 (same as the pipeline)
 let MODE="train";
-const S={train:{days:new Set(),periods:new Set(),area:"",stop:null,stopArea:"",stopDays:new Set()},
-         bus:{days:new Set(),periods:new Set(),area:"",stop:null,stopArea:"",stopDays:new Set()}};
+const fresh=()=>({days:new Set(),periods:new Set(),area:"",stq:"",stop:null,stopArea:"",stopDays:new Set()});
+const S={train:fresh(),bus:fresh()};
+// CTA line colours, in the CTA's usual line order
+const LINES={"Red Line":"#C60C30","Blue Line":"#00A1DE","Brown Line":"#62361B","Green Line":"#009B3A","Orange Line":"#F9461C","Pink Line":"#E27EA6","Purple Line":"#522398","Yellow Line":"#F9E300"},LO=Object.keys(LINES);
 
 // Colour scales copied from the Databricks dashboard.
 // Bars: linear 50% #E58B7B -> 70% #F4D58D -> 90% #8ACB88 -> 100% #4FA36B (clamped). Map: #F0C36D -> #4FA36B.
@@ -163,8 +179,8 @@ function hourChart(byHour){
   const line=segs.map(sg=>sg.length>1?`<polyline points="${sg.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join(" ")}" fill="none" stroke="var(--line-c)" stroke-width="2" stroke-linejoin="round"/>`:"").join("");
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${grid}${line}${dots}${lbl}</svg>`;
 }
-const bar=(name,t,tipName)=>{const r=rate(t);
-  return `<div class="row" data-tip="${esc(tipName||name)}: ${pct(r)} on time · ${num(t.n)} predictions"><span class="nm">${esc(name)}</span><div class="tr"><div style="width:${r}%;background:${rateColor(r)}"></div></div><span class="v">${pct(r)}</span></div>`};
+const bar=(name,t,tipName,pre="",q)=>{const r=rate(t);
+  return `<div class="row"${q==null?"":` data-q="${esc(q)}"`} data-tip="${esc(tipName||name)}: ${pct(r)} on time · ${num(t.n)} predictions"><span class="nm">${pre}${esc(name)}</span><div class="tr"><div style="width:${r}%;background:${rateColor(r)}"></div></div><span class="v">${pct(r)}</span></div>`};
 function periodBars(byPeriod){
   return byPeriod.map((t,i)=>t.n?bar(PERIODS[i][0],t):"").join("")||'<div class="empty">No data</div>';
 }
@@ -175,6 +191,11 @@ function periodSplit(byPeriod){
 }
 const scale='<div class="scale">50% or less<i></i>100% on time</div>';
 const chips=(id,labels,set)=>`<div class="chips" data-set="${id}">${labels.map((l,i)=>`<button data-i="${i}" class="${set.has(id.endsWith("days")?i+1:i)?"on":""}">${l}</button>`).join("")}</div>`;
+const periodSelect=(id,set)=>{const v=set.size?[...set][0]:-1;
+  return `<div class="f"><label>Time of day</label><select id="${id}"><option value="">All times of day</option>${PERIODS.map((p,i)=>`<option value="${i}"${i===v?" selected":""}>${p[0]}</option>`).join("")}</select></div>`};
+const dirty=(s,stop)=>stop?!!(s.stopArea||s.stop!=null||s.stopDays.size):!!(s.area||s.days.size||s.periods.size||s.stq);
+const resetBtn=on=>`<div class="f" style="margin-left:auto"><button class="freset" id="freset"${on?"":" disabled"}>↺ Reset to default</button></div>`;
+const dots=ln=>ln.length?`<span class="lds">${ln.map(l=>`<i class="ld" style="background:${LINES[l]||"var(--mut)"}"></i>`).join("")}</span>`:"";
 const areaSelect=(id,mode,val)=>{const a=[...new Set(D[mode].stops.map(s=>s.area).filter(Boolean))].sort();
   return a.length>1?`<div class="f"><label>Area</label><select id="${id}"><option value="">All areas</option>${a.map(x=>`<option${x===val?" selected":""}>${esc(x)}</option>`).join("")}</select></div>`:""};
 
@@ -183,16 +204,23 @@ function overview(mode){
   const s=S[mode],m=D[mode],T=mode==="train",F={days:s.days,periods:s.periods,area:s.area},{all,byHour,byPeriod,byStop}=summarize(rowsFor(mode,F));
   const stops=Object.entries(byStop).filter(([,t])=>t.n>=MIN_N).map(([i,t])=>({i:+i,...m.stops[i],r:rate(t),n:t.n,t}));
   let rank;
-  if(T){ // grouped by station, platforms of one station next to each other
-    const g={};for(const x of stops.sort((a,b)=>a.label.localeCompare(b.label)))(g[x.label.split(" (")[0]]??=[]).push(x);
-    rank=Object.entries(g).map(([st,xs])=>`<div class="grp">${esc(st)}</div><div class="gi">`+xs.map(x=>bar(x.label.includes(" (")?x.label.slice(x.label.indexOf(" (")+2,-1):x.label,x.t,x.label)).join("")+`</div>`).join("");
+  let lineBar="";
+  if(T){ // grouped by station, platforms of one station next to each other, each with its line dots
+    const tot={},cnt={};for(const r of m.routes){tot[r[0]]=(tot[r[0]]||0)+r[2];(cnt[r[0]]??={})[r[1]]=r[2]}
+    const lnOf=i=>Object.entries(cnt[i]||{}).filter(([,n])=>n>=Math.max(10,.03*tot[i])).map(([l])=>l).sort((a,b)=>LO.indexOf(a)-LO.indexOf(b));
+    const g={},seen=new Set();
+    for(const x of stops){const k=x.label.lastIndexOf(" (");x.st=k<0?x.label:x.label.slice(0,k);x.dir=k<0?"":x.label.slice(k+2,-1);x.ln=lnOf(x.i);x.ln.forEach(l=>seen.add(l));(g[x.st]??=[]).push(x)}
+    rank=Object.keys(g).sort((a,b)=>a.localeCompare(b)).map(st=>`<div class="sg" data-q="${esc(st.toLowerCase())}"><div class="grp">${esc(st)}</div><div class="gi">`
+      +g[st].sort((a,b)=>(LO.indexOf(a.ln[0])-LO.indexOf(b.ln[0]))||a.dir.localeCompare(b.dir)).map(x=>bar(x.dir||x.label,x.t,`${x.label} · ${x.ln.join(", ")||"line unknown"}`,dots(x.ln),`${x.st} ${x.dir} ${x.ln.join(" ")}`.toLowerCase())).join("")+`</div></div>`).join("");
+    lineBar=`<input id="stq" class="stq" placeholder="Filter station…" autocomplete="off" value="${esc(s.stq)}"><div class="lns">${LO.filter(l=>seen.has(l)).map(l=>`<button data-line="${l}" data-tip="Show only ${l} platforms">${dots([l])}${l.replace(" Line","")}</button>`).join("")}</div>`;
   }else rank=stops.sort((a,b)=>b.r-a.r).map(x=>bar(x.label,x.t)).join("");
   $("page").innerHTML=`
   <div class="filters">
     <div class="fhead"><b>🔍 Filters</b><span>apply to every chart <br>on this page</span></div>
     ${areaSelect("area",mode,s.area)}
+    ${periodSelect("period",s.periods)}
     <div class="f"><label>Days of week</label>${chips(mode+"-days",DAYS,s.days)}</div>
-    <div class="f"><label>Time of day</label>${chips(mode+"-periods",PERIODS.map(p=>p[0]),s.periods)}</div>
+    ${resetBtn(dirty(s))}
   </div>
   <div class="grid">
     ${kpi(pct(rate(all)),`${T?"Train":"Bus"} on time (within ${TOL[mode]} min)`,"c4",all.n?rateColor(rate(all)):null)}
@@ -202,9 +230,18 @@ function overview(mode){
     <div class="card c8"><h2>On time by hour of day</h2>${hourChart(byHour)}</div>
     <div class="card c4 vfill"><h2>Most accurate during</h2><div class="vgrow">${periodBars(byPeriod)}</div></div>
     <div class="card c6"><h2>Where are the reliable ${T?"platforms":"stops"}?</h2><div id="map-${mode}"></div>${scale}</div>
-    <div class="card c6"><h2>${T?"Platforms by station":"Most to least reliable stops"}</h2><div class="scroll">${rank||'<div class="empty">No data</div>'}</div></div>
+    <div class="card c6"><h2>${T?"Platforms by station":"Most to least reliable stops"}</h2>${lineBar}<div class="scroll"${T?' id="strank"':""}>${rank||'<div class="empty">No data</div>'}${T?'<div id="stnone" class="empty" hidden>No station matches that search.</div>':""}</div></div>
   </div>`;
   drawMap(mode,stops);
+  if(T)stFilter();
+}
+function stFilter(){const s=S[MODE],q=s.stq.trim().toLowerCase(),box=$("strank");if(!box)return;let any=0;
+  for(const g of box.querySelectorAll(".sg")){const all=!q||g.dataset.q.includes(q);let n=0;
+    for(const r of g.querySelectorAll(".row")){const on=all||r.dataset.q.includes(q);r.hidden=!on;n+=on}
+    g.hidden=!n;any+=n}
+  $("stnone").hidden=!!any||!box.querySelector(".sg");
+  for(const b of document.querySelectorAll(".lns button"))b.classList.toggle("on",q===b.dataset.line.toLowerCase());
+  const rb=$("freset");if(rb)rb.disabled=!dirty(s);
 }
 function drawMap(mode,stops){
   if(maps[mode]){maps[mode].remove();delete maps[mode]}
@@ -234,6 +271,7 @@ function stopPage(mode){
     ${areaSelect("stop-area",mode,s.stopArea)}
     <div class="f combo" style="flex:1;min-width:240px"><label>${T?"Platform":"Stop"} · click to pick or type to search</label><input id="stop" autocomplete="off" style="width:100%" value="${s.stop==null?ALLW:esc(m.stops[s.stop].label)}"><div id="clist" class="clist" hidden></div></div>
     <div class="f"><label>Days of week</label>${chips(mode+"-stopdays",DAYS,s.stopDays)}</div>
+    ${resetBtn(dirty(s,1))}
   </div>
   <div class="grid">
     ${kpi(pct(rate(all)),`On time at ${W1} (within ${TOL[mode]} min)`,"c4",all.n?rateColor(rate(all)):null)}
@@ -242,7 +280,7 @@ function stopPage(mode){
     <div class="card c12"><h2>At ${W1}: early, on time or late?</h2>${splitBar(all)}</div>
     <div class="card c12"><h2>Early, on time or late by time of day</h2>${all.n?periodSplit(byPeriod):'<div class="empty">No data</div>'}</div>
     <div class="card c6"><h2>On time by hour of day</h2>${hourChart(byHour)}</div>
-    <div class="card c6"><h2>${T?"Lines":"Routes"} at ${W1}, most reliable first</h2>${routes.map(r=>bar(r.name,r.t)).join("")||'<div class="empty">No data</div>'}<p class="sub" style="font-size:12px;margin:8px 0 0">All days; the day filter does not apply to this chart.</p></div>
+    <div class="card c6"><h2>${T?"Lines":"Routes"} at ${W1}, most reliable first</h2>${routes.map(r=>bar(r.name,r.t,null,T?dots([r.name]):"")).join("")||'<div class="empty">No data</div>'}<p class="sub" style="font-size:12px;margin:8px 0 0">All days; the day filter does not apply to this chart.</p></div>
   </div>`;
 }
 function quality(){
@@ -274,17 +312,20 @@ function render(){
 }
 document.addEventListener("click",e=>{
   const p=e.target.closest("nav button");if(p){page=p.dataset.p;render();scrollTo(0,0);return}
+  if(e.target.closest("#freset")){const s=S[MODE],f=fresh();for(const k of page.endsWith("-stop")?["stop","stopArea","stopDays"]:["area","days","periods","stq"])s[k]=f[k];render();return}
+  const ln=e.target.closest(".lns button");if(ln){const s=S[MODE],v=ln.dataset.line;s.stq=s.stq.toLowerCase()===v.toLowerCase()?"":v;$("stq").value=s.stq;stFilter();return}
   const c=e.target.closest(".chips button");if(c){const id=c.parentNode.dataset.set,[mode,key]=id.split("-"),set=S[mode][{days:"days",periods:"periods",stopdays:"stopDays"}[key]],v=key==="periods"?+c.dataset.i:+c.dataset.i+1;
     set.has(v)?set.delete(v):set.add(v);render()}
 });
 document.addEventListener("change",e=>{const mode=page.split("-")[0],s=S[mode];
-  if(e.target.id==="area")s.area=e.target.value;else if(e.target.id==="stop-area")s.stopArea=e.target.value;else return;render()});
+  if(e.target.id==="area")s.area=e.target.value;else if(e.target.id==="stop-area")s.stopArea=e.target.value;
+  else if(e.target.id==="period")s.periods=new Set(e.target.value===""?[]:[+e.target.value]);else return;render()});
 function comboBuild(q){const dl=$("clist");if(!dl)return;
   const items=[{label:window.__all,i:""},...window.__list.map(x=>({label:x.label,i:x.i}))],ql=(q||"").toLowerCase();
   dl.innerHTML=items.filter(x=>!ql||x.label.toLowerCase().includes(ql)).map(x=>`<div class="ci" data-i="${x.i}">${esc(x.label)}</div>`).join("")||'<div class="ci off">No match</div>';
   dl.hidden=false}
 document.addEventListener("focusin",e=>{if(e.target.id==="stop"){e.target.select();comboBuild("")}});
-document.addEventListener("input",e=>{if(e.target.id==="stop")comboBuild(e.target.value)});
+document.addEventListener("input",e=>{if(e.target.id==="stop")comboBuild(e.target.value);else if(e.target.id==="stq"){S[MODE].stq=e.target.value;stFilter()}});
 document.addEventListener("mousedown",e=>{const o=e.target.closest(".ci"),dl=$("clist");
   if(o&&!o.classList.contains("off")){e.preventDefault();const s=S[page.split("-")[0]];s.stop=o.dataset.i===""?null:+o.dataset.i;render();return}
   if(dl&&!e.target.closest(".combo"))dl.hidden=true});
