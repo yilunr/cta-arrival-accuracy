@@ -119,7 +119,7 @@ const PAGES=[["train","🚆 Train overview"],["train-stop","🚆 Check your trai
 let D=null,page="train",maps={};
 const TOL={train:2,bus:3}; // minutes: trains on time within 2 min, buses within 3 (same as the pipeline)
 let MODE="train";
-const fresh=()=>({days:new Set(),periods:new Set(),area:"",stq:"",stop:null,stopArea:"",stopDays:new Set()});
+const fresh=()=>({days:new Set(),periods:new Set(),area:"",stq:"",stx:false,stop:null,stopArea:"",stopDays:new Set()});
 const S={train:fresh(),bus:fresh()};
 // CTA line colours, in the CTA's usual line order
 const LINES={"Red Line":"#C60C30","Blue Line":"#00A1DE","Brown Line":"#62361B","Green Line":"#009B3A","Orange Line":"#F9461C","Pink Line":"#E27EA6","Purple Line":"#522398","Yellow Line":"#F9E300"},LO=Object.keys(LINES);
@@ -210,9 +210,10 @@ function overview(mode){
     const lnOf=i=>Object.entries(cnt[i]||{}).filter(([,n])=>n>=Math.max(10,.03*tot[i])).map(([l])=>l).sort((a,b)=>LO.indexOf(a)-LO.indexOf(b));
     const g={},seen=new Set();
     for(const x of stops){const k=x.label.lastIndexOf(" (");x.st=k<0?x.label:x.label.slice(0,k);x.dir=k<0?"":x.label.slice(k+2,-1);x.ln=lnOf(x.i);x.ln.forEach(l=>seen.add(l));(g[x.st]??=[]).push(x)}
+    window.__st=Object.keys(g).sort((a,b)=>a.localeCompare(b)).map(st=>[st,LO.filter(l=>g[st].some(x=>x.ln.includes(l)))]);
     rank=Object.keys(g).sort((a,b)=>a.localeCompare(b)).map(st=>`<div class="sg" data-q="${esc(st.toLowerCase())}"><div class="grp">${esc(st)}</div><div class="gi">`
       +g[st].sort((a,b)=>(LO.indexOf(a.ln[0])-LO.indexOf(b.ln[0]))||a.dir.localeCompare(b.dir)).map(x=>bar(x.dir||x.label,x.t,`${x.label} · ${x.ln.join(", ")||"line unknown"}`,dots(x.ln),`${x.st} ${x.dir} ${x.ln.join(" ")}`.toLowerCase())).join("")+`</div></div>`).join("");
-    lineBar=`<input id="stq" class="stq" placeholder="Filter station…" autocomplete="off" value="${esc(s.stq)}"><div class="lns">${LO.filter(l=>seen.has(l)).map(l=>`<button data-line="${l}" data-tip="Show only ${l} platforms">${dots([l])}${l.replace(" Line","")}</button>`).join("")}</div>`;
+    lineBar=`<div class="combo" style="margin:0 0 8px"><input id="stq" class="stq" style="margin:0" placeholder="Filter station… click to pick or type to search" autocomplete="off" value="${esc(s.stq)}"><div id="stlist" class="clist" hidden></div></div><div class="lns">${LO.filter(l=>seen.has(l)).map(l=>`<button data-line="${l}" data-tip="Show only ${l} platforms">${dots([l])}${l.replace(" Line","")}</button>`).join("")}</div>`;
   }else rank=stops.sort((a,b)=>b.r-a.r).map(x=>bar(x.label,x.t)).join("");
   $("page").innerHTML=`
   <div class="filters">
@@ -236,8 +237,8 @@ function overview(mode){
   if(T)stFilter();
 }
 function stFilter(){const s=S[MODE],q=s.stq.trim().toLowerCase(),box=$("strank");if(!box)return;let any=0;
-  for(const g of box.querySelectorAll(".sg")){const all=!q||g.dataset.q.includes(q);let n=0;
-    for(const r of g.querySelectorAll(".row")){const on=all||r.dataset.q.includes(q);r.hidden=!on;n+=on}
+  for(const g of box.querySelectorAll(".sg")){const all=!q||(s.stx?g.dataset.q===q:g.dataset.q.includes(q));let n=0;
+    for(const r of g.querySelectorAll(".row")){const on=all||(!s.stx&&r.dataset.q.includes(q));r.hidden=!on;n+=on}
     g.hidden=!n;any+=n}
   $("stnone").hidden=!!any||!box.querySelector(".sg");
   for(const b of document.querySelectorAll(".lns button"))b.classList.toggle("on",q===b.dataset.line.toLowerCase());
@@ -312,8 +313,8 @@ function render(){
 }
 document.addEventListener("click",e=>{
   const p=e.target.closest("nav button");if(p){page=p.dataset.p;render();scrollTo(0,0);return}
-  if(e.target.closest("#freset")){const s=S[MODE],f=fresh();for(const k of page.endsWith("-stop")?["stop","stopArea","stopDays"]:["area","days","periods","stq"])s[k]=f[k];render();return}
-  const ln=e.target.closest(".lns button");if(ln){const s=S[MODE],v=ln.dataset.line;s.stq=s.stq.toLowerCase()===v.toLowerCase()?"":v;$("stq").value=s.stq;stFilter();return}
+  if(e.target.closest("#freset")){const s=S[MODE],f=fresh();for(const k of page.endsWith("-stop")?["stop","stopArea","stopDays"]:["area","days","periods","stq","stx"])s[k]=f[k];render();return}
+  const ln=e.target.closest(".lns button");if(ln){const s=S[MODE],v=ln.dataset.line;s.stq=s.stq.toLowerCase()===v.toLowerCase()?"":v;s.stx=false;$("stq").value=s.stq;stFilter();return}
   const c=e.target.closest(".chips button");if(c){const id=c.parentNode.dataset.set,[mode,key]=id.split("-"),set=S[mode][{days:"days",periods:"periods",stopdays:"stopDays"}[key]],v=key==="periods"?+c.dataset.i:+c.dataset.i+1;
     set.has(v)?set.delete(v):set.add(v);render()}
 });
@@ -324,9 +325,15 @@ function comboBuild(q){const dl=$("clist");if(!dl)return;
   const items=[{label:window.__all,i:""},...window.__list.map(x=>({label:x.label,i:x.i}))],ql=(q||"").toLowerCase();
   dl.innerHTML=items.filter(x=>!ql||x.label.toLowerCase().includes(ql)).map(x=>`<div class="ci" data-i="${x.i}">${esc(x.label)}</div>`).join("")||'<div class="ci off">No match</div>';
   dl.hidden=false}
-document.addEventListener("focusin",e=>{if(e.target.id==="stop"){e.target.select();comboBuild("")}});
-document.addEventListener("input",e=>{if(e.target.id==="stop")comboBuild(e.target.value);else if(e.target.id==="stq"){S[MODE].stq=e.target.value;stFilter()}});
-document.addEventListener("mousedown",e=>{const o=e.target.closest(".ci"),dl=$("clist");
+document.addEventListener("focusin",e=>{if(e.target.id==="stop"){e.target.select();comboBuild("")}else if(e.target.id==="stq"){e.target.select();stBuild("")}});
+document.addEventListener("input",e=>{if(e.target.id==="stop")comboBuild(e.target.value);else if(e.target.id==="stq"){S[MODE].stq=e.target.value;S[MODE].stx=false;stFilter();stBuild(e.target.value)}});
+function stBuild(q){const dl=$("stlist");if(!dl)return;const ql=(q||"").trim().toLowerCase();
+  dl.innerHTML=[`<div class="ci sci" data-st="">All stations</div>`,...(window.__st||[]).filter(([st])=>!ql||st.toLowerCase().includes(ql)).map(([st,ln])=>`<div class="ci sci" data-st="${esc(st)}">${dots(ln)}${esc(st)}</div>`)].join("");
+  dl.hidden=false}
+document.addEventListener("mousedown",e=>{const sc=e.target.closest(".sci");
+  if(sc){e.preventDefault();const s=S[MODE];s.stq=sc.dataset.st;s.stx=!!s.stq;$("stq").value=s.stq;$("stlist").hidden=true;$("stq").blur();stFilter();return}
+  const sl=$("stlist");if(sl&&!e.target.closest(".combo"))sl.hidden=true;
+  const o=e.target.closest(".ci"),dl=$("clist");
   if(o&&!o.classList.contains("off")){e.preventDefault();const s=S[page.split("-")[0]];s.stop=o.dataset.i===""?null:+o.dataset.i;render();return}
   if(dl&&!e.target.closest(".combo"))dl.hidden=true});
 document.addEventListener("mousemove",e=>{const t=e.target.closest("[data-tip]"),tip=$("tip");
