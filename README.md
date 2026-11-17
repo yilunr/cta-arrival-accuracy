@@ -6,6 +6,27 @@ How often are the CTA's "arrives in N min" predictions right? This project polls
 
 ![Dashboard preview](docs/preview.png)
 
+## What's on the dashboard
+
+| Tab | What it answers |
+|---|---|
+| 🚆 Train overview / 🚌 Bus overview | How often the tracker is right overall, early vs late, by hour of day and time of day, and on a map. Filter by area, time of day and day of week. |
+| 🚆 Check your train platform / 🚌 Check your bus stop | Pick your platform or stop (click to choose or type to search) and get its numbers plus a plain-English takeaway. |
+| 🔧 Data quality | How many vehicle visits were confirmed arrivals (the only ones scored), and whether polling ran every 2 minutes. |
+
+Built for a commuter skimming on a phone:
+
+- **"What the countdown means for your trip"**: each platform and stop gets a verdict: *Often early* (be there before the countdown says), *Often late* (leave a bigger buffer, avoid tight transfers), *Usually reliable*, or *About average*, plus its worst time of day and the sample size behind it.
+- **Labels in the rankings**: *Runs late*, *Runs early* and *Reliable* tags flag the standouts, compared with every platform or stop under the same filters:
+  - *Runs late*: late share at least 8 points above average
+  - *Runs early*: early share at least 6% and at least 4 points above average
+  - *Reliable*: at least 90% on time and 8 points above average
+  - Nothing is labeled with fewer than 30 predictions behind it.
+- **Platforms by station**: grouped by station, with CTA line-colour dots, a station picker/search, one-tap line filters, and the prediction count (`n = …`) in every bar.
+- **On time by hour of day**: starts at 7 AM, with the AM and PM rush shaded and a dashed line for the average.
+
+Early arrivals are treated as the riskier miss: a train that comes 3 minutes early is one you can miss, while a late one only means a longer wait.
+
 ## What counts as on time
 
 | Mode | On time | Early | Late |
@@ -53,7 +74,7 @@ notebooks/   pipeline notebooks (Databricks source format)
   gold.py, train_gold.py          dashboard tables
   publish_site.py      hourly export to docs/data.json
   ingest_all.py        legacy: the old per-poll Spark ingest, replaced by poll_cta
-docs/        GitHub Pages site (index.html, data.json, preview.png)
+docs/        GitHub Pages site (index.html, data.json, preview.png, avatar.jpg)
 ```
 
 ## Setup
@@ -70,6 +91,10 @@ Never commit API keys or tokens.
 ## Data sources
 
 CTA Train Tracker and Bus Tracker APIs, and the City of Chicago Data Portal for station locations. This project is not affiliated with the CTA.
+
+## Author
+
+Built by **Yilun Ruan**, Data Engineer (MSCS, Georgia Tech). Questions or ideas: [LinkedIn](https://www.linkedin.com/in/yilun-ruan/).
 
 ## License
 
