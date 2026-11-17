@@ -121,6 +121,7 @@ const num=n=>n.toLocaleString("en-US");
 const h12=h=>(h%12||12)+(h<12?" AM":" PM");
 const DAYS=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const PERIODS=[["Overnight (12–5 AM)",0,5],["Early morning (5–7 AM)",5,7],["AM rush (7–10 AM)",7,10],["Midday (10 AM–3 PM)",10,15],["PM rush (3–7 PM)",15,19],["Evening (7 PM–12 AM)",19,24]];
+const ORD=[2,3,4,5,0,1]; // show time of day starting with the AM rush
 const MIN_N=30; // hide stops with too few predictions to be meaningful
 const PAGES=[["train","🚆 Train overview"],["train-stop","🚆 Check your train platform"],["bus","🚌 Bus overview"],["bus-stop","🚌 Check your bus stop"],["quality","🔧 Data quality"]];
 let D=null,page="train",maps={};
@@ -174,11 +175,11 @@ function splitBar(t){
 }
 function hourChart(byHour){
   const W=480,H=150,PL=38,PB=16,PT=8,PR=8;
-  const X=h=>PL+(W-PL-PR)*h/23, Y=r=>PT+(H-PT-PB)*(1-r/100);
+  const X=h=>PL+(W-PL-PR)*((h+17)%24)/23, Y=r=>PT+(H-PT-PB)*(1-r/100);
   let grid="",lbl="",dots="",segs=[],cur=[];
-  for(let v=0;v<=100;v+=25)grid+=`<line x1="${X(0)}" x2="${W-PR}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${PL-5}" y="${Y(v)+3}" text-anchor="end" class="tick">${v}%</text>`;
-  for(let h=0;h<24;h+=3)lbl+=`<text x="${X(h)}" y="${H-2}" text-anchor="middle" class="tick">${h12(h).replace(" ","")}</text>`;
-  for(let h=0;h<24;h++){const t=byHour[h],r=t?rate(t):null;
+  for(let v=0;v<=100;v+=25)grid+=`<line x1="${PL}" x2="${W-PR}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${PL-5}" y="${Y(v)+3}" text-anchor="end" class="tick">${v}%</text>`;
+  for(let k=0;k<24;k+=3){const h=(k+7)%24;lbl+=`<text x="${X(h)}" y="${H-2}" text-anchor="middle" class="tick">${h12(h).replace(" ","")}</text>`}
+  for(let k=0;k<24;k++){const h=(k+7)%24,t=byHour[h],r=t?rate(t):null;
     if(r==null){if(cur.length){segs.push(cur);cur=[]}continue}
     cur.push([X(h),Y(r)]);
     dots+=`<circle cx="${X(h)}" cy="${Y(r)}" r="8" fill="transparent" data-tip="${h12(h)}: ${pct(r)} on time · ${num(t.n)} predictions"/><circle cx="${X(h)}" cy="${Y(r)}" r="3.2" fill="var(--line-c)" pointer-events="none"/>`}
@@ -194,17 +195,17 @@ const tag=k=>{const [a,w]=TAGS[k][0].split(" ");return `<span class="tg tg-${k}"
 const bar=(name,t,tipName,pre="",q,o={})=>{const r=rate(t),tg=o.tags||[];
   return `<div class="row"${q==null?"":` data-q="${esc(q)}"`} data-tip="${esc(tipName||name)}: ${pct(r)} on time · n = ${num(t.n)} predictions${tg.map(k=>" · "+TAGS[k][0].toLowerCase()).join("")}"><span class="nm">${pre}<span class="nt">${esc(name)}</span>${tg.map(tag).join("")}</span><div class="tr"><div style="width:${r}%;background:${rateColor(r)}"></div>${o.n?`<span class="nn" style="color:${r<35?"var(--ink)":"#1b1f23"}">n = ${num(t.n)}</span>`:""}</div><span class="v">${pct(r)}</span></div>`};
 function periodBars(byPeriod){
-  return byPeriod.map((t,i)=>t.n?bar(PERIODS[i][0],t):"").join("")||'<div class="empty">No data</div>';
+  return ORD.map(i=>[byPeriod[i],i]).map(([t,i])=>t.n?bar(PERIODS[i][0],t):"").join("")||'<div class="empty">No data</div>';
 }
 function periodSplit(byPeriod){
-  return byPeriod.map((t,i)=>{if(!t.n)return "";const e=100*t.e/t.n,l=100*t.l/t.n,o=100-e-l;
+  return ORD.map(i=>[byPeriod[i],i]).map(([t,i])=>{if(!t.n)return "";const e=100*t.e/t.n,l=100*t.l/t.n,o=100-e-l;
     return `<div class="row" data-tip="${PERIODS[i][0]}: early ${e.toFixed(1)}% · on time ${o.toFixed(1)}% · late ${l.toFixed(1)}% (${num(t.n)} predictions)"><span class="nm">${PERIODS[i][0]}</span><div class="tr" style="height:18px;background:none"><div style="width:${e}%;background:var(--early);border-radius:4px 0 0 4px"></div><div style="width:${o}%;background:var(--ok);border-radius:0"></div><div style="width:${l}%;background:var(--late)"></div></div><span class="v">${pct(o)}</span></div>`}).join("")
     +`<div class="legend"><span><i style="background:var(--early)"></i>Early (more than ${TOL[MODE]} min)</span><span><i style="background:var(--ok)"></i>On time (within ${TOL[MODE]} min)</span><span><i style="background:var(--late)"></i>Late (more than ${TOL[MODE]} min)</span></div>`;
 }
 const scale='<div class="scale">50% or less<i></i>100% on time</div>';
 const chips=(id,labels,set)=>`<div class="chips" data-set="${id}">${labels.map((l,i)=>`<button data-i="${i}" class="${set.has(id.endsWith("days")?i+1:i)?"on":""}">${l}</button>`).join("")}</div>`;
 const periodSelect=(id,set)=>{const v=set.size?[...set][0]:-1;
-  return `<div class="f"><label>Time of day</label><select id="${id}"><option value="">All times of day</option>${PERIODS.map((p,i)=>`<option value="${i}"${i===v?" selected":""}>${p[0]}</option>`).join("")}</select></div>`};
+  return `<div class="f"><label>Time of day</label><select id="${id}"><option value="">All times of day</option>${ORD.map(i=>`<option value="${i}"${i===v?" selected":""}>${PERIODS[i][0]}</option>`).join("")}</select></div>`};
 const dirty=(s,stop)=>stop?!!(s.stopArea||s.stop!=null||s.stopDays.size):!!(s.area||s.days.size||s.periods.size||s.stq);
 const resetBtn=on=>`<div class="f" style="margin-left:auto"><button class="freset" id="freset"${on?"":" disabled"}>↺ Reset to default</button></div>`;
 const dots=ln=>ln.length?`<span class="lds">${ln.map(l=>`<i class="ld" style="background:${LINES[l]||"var(--mut)"}"></i>`).join("")}</span>`:"";
