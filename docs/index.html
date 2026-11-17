@@ -48,8 +48,14 @@ select,#stop{font:inherit;padding:7px 8px;border-radius:8px;border:1px solid var
 .cols .col small{position:absolute}
 .xl{display:flex;gap:3px;font-size:10.5px;color:var(--mut);margin-top:4px}.xl span{flex:1;text-align:center;white-space:nowrap;overflow:visible}
 .row{display:grid;grid-template-columns:minmax(120px,42%) 1fr 44px;gap:8px;align-items:center;margin:4px 0;font-size:13px}
-.row .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.row .tr{background:var(--chip);border-radius:4px;height:14px;overflow:hidden;display:flex;gap:2px}
+.row .nm{display:flex;align-items:center;min-width:0;white-space:nowrap}
+.row .nt{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.row .tr{background:var(--chip);border-radius:4px;height:14px;overflow:hidden;display:flex;gap:2px;position:relative}
+.rk .tr{height:18px}
+.tr .nn{position:absolute;left:7px;top:0;bottom:0;display:flex;align-items:center;font-size:10.5px;font-weight:600;opacity:.8;pointer-events:none;font-variant-numeric:tabular-nums}
+.tg{flex:none;font-size:10.5px;font-weight:600;line-height:1.5;padding:0 6px;border-radius:9px;margin-left:6px;color:var(--ink);background:color-mix(in srgb,var(--c) 20%,transparent);border:1px solid color-mix(in srgb,var(--c) 60%,transparent)}
+.tk{border-left:4px solid var(--c)}.tk h2{color:var(--ink);font-size:16px;margin-bottom:6px}
+.tk p{margin:3px 0;font-size:14px;color:var(--ink2);line-height:1.5}.tk .src{font-size:12px;color:var(--mut);margin-top:6px}
 .row .tr div{height:100%;border-radius:0 4px 4px 0}
 .row .v{text-align:right;font-variant-numeric:tabular-nums}
 .vfill{display:flex;flex-direction:column}.vfill .vgrow{flex:1;display:flex;flex-direction:column;justify-content:space-evenly}
@@ -95,6 +101,7 @@ select,#stop{font:inherit;padding:7px 8px;border-radius:8px;border:1px solid var
  .split .lf{display:none}
  .filters .f{min-width:0;max-width:100%}
  .row{grid-template-columns:minmax(90px,40%) 1fr 38px;font-size:12px}
+ .tg b,.tg-good{display:none}.tg{margin-left:4px;padding:0 5px}
  .stq,#stop,.filters select{font-size:16px}
 }
 </style></head><body><main>
@@ -179,8 +186,13 @@ function hourChart(byHour){
   const line=segs.map(sg=>sg.length>1?`<polyline points="${sg.map(p=>p[0].toFixed(1)+","+p[1].toFixed(1)).join(" ")}" fill="none" stroke="var(--line-c)" stroke-width="2" stroke-linejoin="round"/>`:"").join("");
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${grid}${line}${dots}${lbl}</svg>`;
 }
-const bar=(name,t,tipName,pre="",q)=>{const r=rate(t);
-  return `<div class="row"${q==null?"":` data-q="${esc(q)}"`} data-tip="${esc(tipName||name)}: ${pct(r)} on time · ${num(t.n)} predictions"><span class="nm">${pre}${esc(name)}</span><div class="tr"><div style="width:${r}%;background:${rateColor(r)}"></div></div><span class="v">${pct(r)}</span></div>`};
+// Takeaway labels: compared with every platform/stop of the same mode under the same day/time filters
+const TAGS={late:["Runs late","var(--late)"],early:["Runs early","var(--early)"],good:["Reliable","var(--ok)"]};
+function verdict(t,b){if(!t.n||t.n<MIN_N||!b.n)return [];const r=rate(t),e=100*t.e/t.n,l=100*t.l/t.n,br=rate(b),be=100*b.e/b.n,bl=100*b.l/b.n,v=[];
+  if(l>=bl+8)v.push("late");if(e>=Math.max(6,be+4))v.push("early");if(!v.length&&r>=Math.max(90,br+8))v.push("good");return v}
+const tag=k=>{const [a,w]=TAGS[k][0].split(" ");return `<span class="tg tg-${k}" style="--c:${TAGS[k][1]}">${w?`<b>${a} </b>${w}`:a}</span>`};
+const bar=(name,t,tipName,pre="",q,o={})=>{const r=rate(t),tg=o.tags||[];
+  return `<div class="row"${q==null?"":` data-q="${esc(q)}"`} data-tip="${esc(tipName||name)}: ${pct(r)} on time · n = ${num(t.n)} predictions${tg.map(k=>" · "+TAGS[k][0].toLowerCase()).join("")}"><span class="nm">${pre}<span class="nt">${esc(name)}</span>${tg.map(tag).join("")}</span><div class="tr"><div style="width:${r}%;background:${rateColor(r)}"></div>${o.n?`<span class="nn" style="color:${r<35?"var(--ink)":"#1b1f23"}">n = ${num(t.n)}</span>`:""}</div><span class="v">${pct(r)}</span></div>`};
 function periodBars(byPeriod){
   return byPeriod.map((t,i)=>t.n?bar(PERIODS[i][0],t):"").join("")||'<div class="empty">No data</div>';
 }
@@ -201,7 +213,7 @@ const areaSelect=(id,mode,val)=>{const a=[...new Set(D[mode].stops.map(s=>s.area
 
 // ---- pages
 function overview(mode){
-  const s=S[mode],m=D[mode],T=mode==="train",F={days:s.days,periods:s.periods,area:s.area},{all,byHour,byPeriod,byStop}=summarize(rowsFor(mode,F));
+  const s=S[mode],m=D[mode],T=mode==="train",F={days:s.days,periods:s.periods,area:s.area},{all,byHour,byPeriod,byStop}=summarize(rowsFor(mode,F)),B=summarize(rowsFor(mode,{days:s.days,periods:s.periods})).all;
   const stops=Object.entries(byStop).filter(([,t])=>t.n>=MIN_N).map(([i,t])=>({i:+i,...m.stops[i],r:rate(t),n:t.n,t}));
   let rank;
   let lineBar="";
@@ -212,9 +224,9 @@ function overview(mode){
     for(const x of stops){const k=x.label.lastIndexOf(" (");x.st=k<0?x.label:x.label.slice(0,k);x.dir=k<0?"":x.label.slice(k+2,-1);x.ln=lnOf(x.i);x.ln.forEach(l=>seen.add(l));(g[x.st]??=[]).push(x)}
     window.__st=Object.keys(g).sort((a,b)=>a.localeCompare(b)).map(st=>[st,LO.filter(l=>g[st].some(x=>x.ln.includes(l)))]);
     rank=Object.keys(g).sort((a,b)=>a.localeCompare(b)).map(st=>`<div class="sg" data-q="${esc(st.toLowerCase())}"><div class="grp">${esc(st)}</div><div class="gi">`
-      +g[st].sort((a,b)=>(LO.indexOf(a.ln[0])-LO.indexOf(b.ln[0]))||a.dir.localeCompare(b.dir)).map(x=>bar(x.dir||x.label,x.t,`${x.label} · ${x.ln.join(", ")||"line unknown"}`,dots(x.ln),`${x.st} ${x.dir} ${x.ln.join(" ")}`.toLowerCase())).join("")+`</div></div>`).join("");
+      +g[st].sort((a,b)=>(LO.indexOf(a.ln[0])-LO.indexOf(b.ln[0]))||a.dir.localeCompare(b.dir)).map(x=>bar(x.dir||x.label,x.t,`${x.label} · ${x.ln.join(", ")||"line unknown"}`,dots(x.ln),`${x.st} ${x.dir} ${x.ln.join(" ")}`.toLowerCase(),{n:1,tags:verdict(x.t,B)})).join("")+`</div></div>`).join("");
     lineBar=`<div class="combo" style="margin:0 0 8px"><input id="stq" class="stq" style="margin:0" placeholder="Filter station… click to pick or type to search" autocomplete="off" value="${esc(s.stq)}"><div id="stlist" class="clist" hidden></div></div><div class="lns">${LO.filter(l=>seen.has(l)).map(l=>`<button data-line="${l}" data-tip="Show only ${l} platforms">${dots([l])}${l.replace(" Line","")}</button>`).join("")}</div>`;
-  }else rank=stops.sort((a,b)=>b.r-a.r).map(x=>bar(x.label,x.t)).join("");
+  }else rank=stops.sort((a,b)=>b.r-a.r).map(x=>bar(x.label,x.t,null,"",null,{n:1,tags:verdict(x.t,B)})).join("");
   $("page").innerHTML=`
   <div class="filters">
     <div class="fhead"><b>🔍 Filters</b><span>apply to every chart <br>on this page</span></div>
@@ -231,7 +243,7 @@ function overview(mode){
     <div class="card c8"><h2>On time by hour of day</h2>${hourChart(byHour)}</div>
     <div class="card c4 vfill"><h2>Most accurate during</h2><div class="vgrow">${periodBars(byPeriod)}</div></div>
     <div class="card c6"><h2>Where are the reliable ${T?"platforms":"stops"}?</h2><div id="map-${mode}"></div>${scale}</div>
-    <div class="card c6"><h2>${T?"Platforms by station":"Most to least reliable stops"}</h2>${lineBar}<div class="scroll"${T?' id="strank"':""}>${rank||'<div class="empty">No data</div>'}${T?'<div id="stnone" class="empty" hidden>No station matches that search.</div>':""}</div></div>
+    <div class="card c6"><h2>${T?"Platforms by station":"Most to least reliable stops"}</h2>${lineBar}<div class="scroll rk"${T?' id="strank"':""}>${rank||'<div class="empty">No data</div>'}${T?'<div id="stnone" class="empty" hidden>No station matches that search.</div>':""}</div></div>
   </div>`;
   drawMap(mode,stops);
   if(T)stFilter();
@@ -278,11 +290,36 @@ function stopPage(mode){
     ${kpi(pct(rate(all)),`On time at ${W1} (within ${TOL[mode]} min)`,"c4",all.n?rateColor(rate(all)):null)}
     ${kpi(typical(mode,F,all),"Typically off by (minutes)","c4","var(--line-c)")}
     ${kpi(num(all.n),"Predictions checked","c4")}
+    ${takeaway(mode,s,all,byPeriod)}
     <div class="card c12"><h2>At ${W1}: early, on time or late?</h2>${splitBar(all)}</div>
     <div class="card c12"><h2>Early, on time or late by time of day</h2>${all.n?periodSplit(byPeriod):'<div class="empty">No data</div>'}</div>
     <div class="card c6"><h2>On time by hour of day</h2>${hourChart(byHour)}</div>
     <div class="card c6"><h2>${T?"Lines":"Routes"} at ${W1}, most reliable first</h2>${routes.map(r=>bar(r.name,r.t,null,T?dots([r.name]):"")).join("")||'<div class="empty">No data</div>'}<p class="sub" style="font-size:12px;margin:8px 0 0">All days; the day filter does not apply to this chart.</p></div>
   </div>`;
+}
+function takeaway(mode,s,all,byPeriod){
+  const T=mode==="train",U=T?"trains":"buses",P=T?"platform":"stop",PS=T?"platforms":"stops",tol=TOL[mode];
+  const B=summarize(rowsFor(mode,{days:s.stopDays})).all,card=(c,h,ps)=>`<div class="card c12 tk" style="--c:${c}"><h2>${h}</h2>${ps.map(p=>`<p>${p}</p>`).join("")}<p class="src">Based on n = ${num(all.n)} predictions over the last ${D.window_days} days${s.stopDays.size?" on the selected days":""}${s.stop==null?"":`, compared with ${num(B.n)} across every ${P}`}.</p></div>`;
+  if(!all.n)return "";
+  if(all.n<MIN_N)return card("var(--mut)","💡 Not enough data here yet",[`Only ${num(all.n)} predictions so far, too few to give advice. Check back in a few days.`]);
+  const r=rate(all),e=100*all.e/all.n,l=100*all.l/all.n,br=rate(B),be=100*B.e/B.n,bl=100*B.l/B.n,f=v=>Math.round(v)+"%";
+  const per=byPeriod.map((t,i)=>({i,t,r:rate(t)})).filter(x=>x.t.n>=MIN_N);
+  const worst=per.length>1?per.reduce((a,b)=>b.r<a.r?b:a):null,best=per.length>1?per.reduce((a,b)=>b.r>a.r?b:a):null;
+  const pn=i=>"the "+PERIODS[i][0].replace(/^([A-Z])(?=[a-z])/,c=>c.toLowerCase()),when=[];
+  if(worst&&worst.r<=r-6)when.push(`<b>Worst during ${pn(worst.i)}</b>: ${f(worst.r)} on time. Give yourself the most slack then.`);
+  if(best&&best.r>=r+5&&best.r>=75)when.push(`Best during ${pn(best.i)}: ${f(best.r)} on time.`);
+  if(s.stop==null)return card("var(--line-c)",`💡 How far to trust the countdown`,[
+    `Across all ${PS}, ${f(r)} of ${U} arrive within ${tol} min of what the tracker says. When it misses, ${U} are usually ${l>=e?`<b>late</b> (${f(l)}) rather than early (${f(e)})`:`<b>early</b> (${f(e)}) rather than late (${f(l)})`}.`,
+    ...when,`Pick your ${P} above for advice specific to it.`]);
+  const v=verdict(all,B),ps=[];let c="var(--mut)",h="➖ About average: plan as usual";
+  if(v.includes("early")){c="var(--early)";h=`⏱️ Often early: get there before the countdown says`;
+    ps.push(`<b>${f(e)} of ${U} here arrive more than ${tol} min before the tracker says</b> (${f(be)} across all ${PS}). Be at the ${P} a few minutes before the countdown hits zero, or you could miss it.`)}
+  if(v.includes("late")){if(!v.includes("early")){c="var(--late)";h=`⚠️ Often late: leave a bigger buffer`}
+    ps.push(`<b>${f(l)} of ${U} here arrive more than ${tol} min after the tracker says</b> (${f(bl)} across all ${PS}). Expect longer waits and don't count on a tight transfer.`)}
+  if(v.includes("good")){c="var(--ok)";h=`✅ Reliable: you can trust the countdown here`;
+    ps.push(`<b>${f(r)} on time</b>, against ${f(br)} across all ${PS}.`)}
+  if(!v.length)ps.push(`${f(r)} of ${U} arrive within ${tol} min of the prediction, close to the ${f(br)} across all ${PS}. A minute or two of slack is enough.`);
+  return card(c,h,[...ps,...when]);
 }
 function quality(){
   const block=(k,icon,name)=>{const T2=k==="train",q=D.quality[k],v=q.days.reduce((a,d)=>a+d[1],0),ar=q.days.reduce((a,d)=>a+d[2],0);
